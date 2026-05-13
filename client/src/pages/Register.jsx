@@ -6,6 +6,7 @@ function Register() {
   const [formData, setFormData] = useState({
     fullName: "",
     email: "",
+    dob: "",
     password: "",
     confirmPassword: "",
   });
@@ -27,7 +28,7 @@ function Register() {
     setMessage("");
     setError("");
 
-    if (!formData.fullName || !formData.email || !formData.password) {
+    if (!formData.fullName || !formData.email || !formData.dob || !formData.password) {
       setError("Please fill in all required fields");
       return;
     }
@@ -48,6 +49,7 @@ function Register() {
       const response = await axios.post("http://localhost:5001/api/auth/register", {
         fullName: formData.fullName,
         email: formData.email,
+        dob: formData.dob,
         password: formData.password,
       });
 
@@ -56,6 +58,7 @@ function Register() {
       setFormData({
         fullName: "",
         email: "",
+        dob: "",
         password: "",
         confirmPassword: "",
       });
@@ -69,7 +72,7 @@ function Register() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white flex items-center justify-center px-6">
+    <div className="min-h-screen bg-slate-950 text-white flex items-center justify-center px-6 py-10">
       <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl p-8">
         <div className="text-center mb-8">
           <Link to="/" className="inline-flex items-center gap-2 mb-6">
@@ -125,6 +128,20 @@ function Register() {
               className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-white outline-none focus:border-blue-500"
             />
           </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-2">
+              Date of Birth
+            </label>
+
+            <input
+             type="date"
+            name="dob"
+             value={formData.dob}
+             onChange={handleChange}
+            className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-white outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
+             />
+            </div>
 
           <div>
             <label className="block text-sm font-medium text-slate-300 mb-2">
