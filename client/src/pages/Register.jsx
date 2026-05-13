@@ -1,8 +1,9 @@
 import axios from "axios";
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 function Register() {
+  const navigate = useNavigate();
   const [formData, setFormData] = useState({
     fullName: "",
     email: "",
@@ -53,7 +54,11 @@ function Register() {
         password: formData.password,
       });
 
+      localStorage.setItem("token", response.data.token);
+      localStorage.setItem("user", JSON.stringify(response.data.user));
+
       setMessage(response.data.message);
+      navigate("/admin");
 
       setFormData({
         fullName: "",
