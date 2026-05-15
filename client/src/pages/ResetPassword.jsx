@@ -1,15 +1,17 @@
 import axios from "axios";
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 
-function Login() {
+function ResetPassword() {
+  const { token } = useParams();
   const navigate = useNavigate();
 
   const [formData, setFormData] = useState({
-    email: "",
     password: "",
+    confirmPassword: "",
   });
 
+  const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -22,27 +24,44 @@ function Login() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    setMessage("");
     setError("");
 
-    if (!formData.email || !formData.password) {
-      setError("Email and password are required");
+    if (!formData.password || !formData.confirmPassword) {
+      setError("Please fill in all fields");
+      return;
+    }
+
+    if (formData.password.length < 6) {
+      setError("Password must be at least 6 characters");
+      return;
+    }
+
+    if (formData.password !== formData.confirmPassword) {
+      setError("Passwords do not match");
       return;
     }
 
     try {
       setLoading(true);
 
-      const response = await axios.post("http://localhost:5001/api/auth/login", {
-        email: formData.email,
-        password: formData.password,
-      });
+      const response = await axios.post(
+        `http://localhost:5001/api/auth/reset-password/${token}`,
+        {
+          password: formData.password,
+        }
+      );
 
-      localStorage.setItem("token", response.data.token);
-      localStorage.setItem("user", JSON.stringify(response.data.user));
+      setMessage(response.data.message);
 
-      navigate("/admin");
+      setTimeout(() => {
+        navigate("/login");
+      }, 1500);
     } catch (err) {
-      setError(err.response?.data?.message || "Login failed");
+      setError(
+        err.response?.data?.message || "Failed to reset password"
+      );
     } finally {
       setLoading(false);
     }
@@ -59,9 +78,17 @@ function Login() {
             <span className="text-2xl font-bold">SupportAI</span>
           </Link>
 
-          <h1 className="text-3xl font-bold mb-2">Login</h1>
-          <p className="text-slate-400">Access your SupportAI dashboard.</p>
+          <h1 className="text-3xl font-bold mb-2">Create New Password</h1>
+          <p className="text-slate-400">
+            Enter your new password below.
+          </p>
         </div>
+
+        {message && (
+          <div className="bg-green-500/10 border border-green-500 text-green-400 px-4 py-3 rounded-lg mb-5">
+            {message}
+          </div>
+        )}
 
         {error && (
           <div className="bg-red-500/10 border border-red-500 text-red-400 px-4 py-3 rounded-lg mb-5">
@@ -72,39 +99,32 @@ function Login() {
         <form onSubmit={handleSubmit} className="space-y-5">
           <div>
             <label className="block text-sm font-medium text-slate-300 mb-2">
-              Email Address
+              New Password
             </label>
+
             <input
-              type="email"
-              name="email"
-              value={formData.email}
+              type="password"
+              name="password"
+              value={formData.password}
               onChange={handleChange}
-              placeholder="Enter your email"
+              placeholder="Enter new password"
               className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-white outline-none focus:border-blue-500"
             />
           </div>
 
           <div>
             <label className="block text-sm font-medium text-slate-300 mb-2">
-              Password
+              Confirm New Password
             </label>
+
             <input
               type="password"
-              name="password"
-              value={formData.password}
+              name="confirmPassword"
+              value={formData.confirmPassword}
               onChange={handleChange}
-              placeholder="Enter your password"
+              placeholder="Confirm new password"
               className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-white outline-none focus:border-blue-500"
             />
-          </div>
-
-          <div className="text-right">
-            <Link
-              to="/forgot-password"
-              className="text-sm text-blue-400 hover:text-blue-300"
-            >
-              Forgot password?
-            </Link>
           </div>
 
           <button
@@ -112,19 +132,12 @@ function Login() {
             disabled={loading}
             className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 py-3 rounded-xl font-semibold transition"
           >
-            {loading ? "Logging in..." : "Login"}
+            {loading ? "Resetting..." : "Reset Password"}
           </button>
         </form>
-
-        <p className="text-center text-slate-400 mt-6">
-          Don&apos;t have an account?{" "}
-          <Link to="/register" className="text-blue-400 hover:text-blue-300">
-            Create Account
-          </Link>
-        </p>
       </div>
     </div>
   );
 }
 
-export default Login;
+export default ResetPassword;

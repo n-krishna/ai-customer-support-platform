@@ -308,7 +308,7 @@ function Home() {
       {/* Footer */}
       <footer className="px-6 md:px-12 py-8 border-t border-slate-800 text-center text-slate-400">
         <p>
-          © 2026 SupportAI. Built as a full-stack software developer project.
+          © 2026 SupportAI. Full-Stack AI Customer Support Platform built by Nithin Krishna.
         </p>
       </footer>
     </div>
