@@ -1,18 +1,21 @@
 import {
-    CheckCircle,
-    Clock,
-    LogOut,
-    MessageCircle,
-    Ticket,
-    User,
+  CheckCircle,
+  ChevronDown,
+  Clock,
+  LogOut,
+  MessageCircle,
+  Ticket,
+  User,
 } from "lucide-react";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 function CustomerDashboard() {
   const navigate = useNavigate();
   const token = localStorage.getItem("token");
   const user = JSON.parse(localStorage.getItem("user"));
+
+  const [showDropdown, setShowDropdown] = useState(false);
 
   useEffect(() => {
     if (!token) {
@@ -21,11 +24,19 @@ function CustomerDashboard() {
   }, [token, navigate]);
 
   const handleLogout = () => {
-    localStorage.removeItem("token");
-    localStorage.removeItem("user");
+    localStorage.clear();
 
-    navigate("/login", { replace: true });
+    navigate("/login", {
+      replace: true,
+    });
+
+    setTimeout(() => {
+      window.location.reload();
+    }, 100);
   };
+
+  const displayName =
+    user?.full_name || user?.fullName || user?.name || "Customer";
 
   const cards = [
     {
@@ -79,18 +90,58 @@ function CustomerDashboard() {
               AI
             </div>
 
-            <span className="text-2xl font-bold">
-              SupportAI
-            </span>
+            <span className="text-2xl font-bold">SupportAI</span>
           </Link>
 
-          <button
-            onClick={handleLogout}
-            className="flex items-center gap-2 bg-slate-900 border border-slate-700 hover:border-blue-500 px-4 py-2 rounded-xl text-slate-300 hover:text-white transition"
-          >
-            <LogOut size={16} />
-            Logout
-          </button>
+          <div className="relative">
+            <button
+              onClick={() => setShowDropdown(!showDropdown)}
+              className="flex items-center gap-3 bg-slate-900 border border-slate-700 hover:border-blue-500 px-4 py-2 rounded-xl transition"
+            >
+              <div className="w-9 h-9 bg-blue-600 rounded-full flex items-center justify-center font-bold">
+                {displayName.charAt(0).toUpperCase()}
+              </div>
+
+              <div className="hidden sm:block text-left">
+                <p className="text-sm font-semibold text-white">
+                  {displayName}
+                </p>
+
+                <p className="text-xs text-slate-400">Customer</p>
+              </div>
+
+              <ChevronDown size={16} className="text-slate-400" />
+            </button>
+
+            {showDropdown && (
+              <div className="absolute right-0 mt-3 w-56 bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl overflow-hidden z-50">
+                <div className="px-4 py-3 border-b border-slate-800">
+                  <p className="font-semibold text-white">{displayName}</p>
+
+                  <p className="text-sm text-slate-400">
+                    {user?.email || "Customer account"}
+                  </p>
+                </div>
+
+                <Link
+                  to="/profile"
+                  className="flex items-center gap-2 px-4 py-3 text-slate-300 hover:bg-slate-800 hover:text-white transition"
+                  onClick={() => setShowDropdown(false)}
+                >
+                  <User size={16} />
+                  Profile
+                </Link>
+
+                <button
+                  onClick={handleLogout}
+                  className="w-full flex items-center gap-2 px-4 py-3 text-red-400 hover:bg-red-500/10 transition"
+                >
+                  <LogOut size={16} />
+                  Logout
+                </button>
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="bg-gradient-to-br from-blue-600 via-blue-700 to-slate-900 rounded-3xl p-8 md:p-10 shadow-2xl mb-10">
@@ -99,13 +150,12 @@ function CustomerDashboard() {
           </p>
 
           <h1 className="text-4xl md:text-5xl font-bold mb-4">
-            Welcome, {user?.full_name || user?.name || "Customer"}
+            Welcome, {displayName}
           </h1>
 
           <p className="text-blue-100 max-w-2xl text-lg">
-            Get instant AI help, create support tickets,
-            track issue progress, and view replies from
-            the support team.
+            Get instant AI help, create support tickets, track issue progress,
+            and view replies from the support team.
           </p>
         </div>
 
