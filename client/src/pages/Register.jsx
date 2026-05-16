@@ -85,40 +85,50 @@ function Register() {
   };
 
   const handleVerifyOtp = async (e) => {
-    e.preventDefault();
+  e.preventDefault();
 
-    setMessage("");
-    setError("");
+  setMessage("");
+  setError("");
 
-    if (!otp) {
-      setError("Please enter the OTP");
-      return;
+  if (!otp) {
+    setError("Please enter the OTP");
+    return;
+  }
+
+  try {
+    setLoading(true);
+
+    const response = await axios.post(
+      "http://localhost:5001/api/auth/verify-otp",
+      {
+        email: formData.email,
+        otp,
+      }
+    );
+
+    localStorage.setItem("token", response.data.token);
+
+    localStorage.setItem(
+      "user",
+      JSON.stringify(response.data.user)
+    );
+
+    setMessage(response.data.message);
+
+    if (response.data.user.role === "admin") {
+      navigate("/admin", { replace: true });
+    } else {
+      navigate("/dashboard", { replace: true });
     }
-
-    try {
-      setLoading(true);
-
-      const response = await axios.post(
-        "http://localhost:5001/api/auth/verify-otp",
-        {
-          email: formData.email,
-          otp,
-        }
-      );
-
-      localStorage.setItem("token", response.data.token);
-      localStorage.setItem("user", JSON.stringify(response.data.user));
-
-      setMessage(response.data.message);
-      navigate("/admin");
-    } catch (err) {
-      setError(
-        err.response?.data?.message || "Invalid OTP. Please try again."
-      );
-    } finally {
-      setLoading(false);
-    }
-  };
+  } catch (err) {
+    setError(
+      err.response?.data?.message ||
+        "Invalid OTP. Please try again."
+    );
+  } finally {
+    setLoading(false);
+  }
+};
 
   return (
     <div className="min-h-screen bg-slate-950 text-white grid lg:grid-cols-2">
