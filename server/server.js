@@ -51,6 +51,14 @@ const verifyToken = (req, res, next) => {
   }
 };
 
+const transporter = nodemailer.createTransport({
+  service: "gmail",
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS,
+  },
+});
+
 app.get("/", (req, res) => {
   res.send("SupportAI backend is running");
 });
@@ -74,27 +82,38 @@ app.post("/api/auth/register", async (req, res) => {
     if (existingUser.rows.length > 0) {
       return res.status(409).json({
         success: false,
-        message: "User already exists",
+        message: "Account already exists with this email",
       });
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const otpExpires = new Date(Date.now() + 10 * 60 * 1000);
 
-    const result = await pool.query(
-      `INSERT INTO users (full_name, email, dob, password)
-       VALUES ($1, $2, $3, $4)
-       RETURNING id, full_name, email, dob, role, created_at`,
-      [fullName, email, dob, hashedPassword]
+    await pool.query("DELETE FROM pending_users WHERE email = $1", [email]);
+
+    await pool.query(
+      `INSERT INTO pending_users
+       (full_name, email, dob, password, otp, otp_expires)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [fullName, email, dob, hashedPassword, otp, otpExpires]
     );
 
-    const user = result.rows[0];
-    const token = generateToken(user);
+    await transporter.sendMail({
+      from: `"SupportAI" <${process.env.EMAIL_USER}>`,
+      to: email,
+      subject: "SupportAI Email Verification OTP",
+      html: `
+        <h2>Email Verification</h2>
+        <p>Your OTP code is:</p>
+        <h1>${otp}</h1>
+        <p>This OTP expires in 10 minutes.</p>
+      `,
+    });
 
-    res.status(201).json({
+    res.status(200).json({
       success: true,
-      message: "Account created successfully",
-      token,
-      user,
+      message: "OTP sent to your email",
     });
   } catch (error) {
     console.error("Register error:", error.message);
@@ -102,6 +121,74 @@ app.post("/api/auth/register", async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Server error during registration",
+    });
+  }
+});
+
+app.post("/api/auth/verify-otp", async (req, res) => {
+  try {
+    const { email, otp } = req.body;
+
+    if (!email || !otp) {
+      return res.status(400).json({
+        success: false,
+        message: "Email and OTP are required",
+      });
+    }
+
+    const pendingUser = await pool.query(
+      "SELECT * FROM pending_users WHERE email = $1",
+      [email]
+    );
+
+    if (pendingUser.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "No pending registration found",
+      });
+    }
+
+    const user = pendingUser.rows[0];
+
+    if (user.otp !== otp) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid OTP",
+      });
+    }
+
+    if (new Date() > new Date(user.otp_expires)) {
+      return res.status(400).json({
+        success: false,
+        message: "OTP expired. Please register again.",
+      });
+    }
+
+    const result = await pool.query(
+      `INSERT INTO users
+       (full_name, email, dob, password)
+       VALUES ($1, $2, $3, $4)
+       RETURNING id, full_name, email, dob, role, created_at`,
+      [user.full_name, user.email, user.dob, user.password]
+    );
+
+    await pool.query("DELETE FROM pending_users WHERE email = $1", [email]);
+
+    const newUser = result.rows[0];
+    const token = generateToken(newUser);
+
+    res.status(201).json({
+      success: true,
+      message: "Account verified successfully",
+      token,
+      user: newUser,
+    });
+  } catch (error) {
+    console.error("OTP verification error:", error.message);
+
+    res.status(500).json({
+      success: false,
+      message: "Server error verifying OTP",
     });
   }
 });
@@ -129,7 +216,6 @@ app.post("/api/auth/login", async (req, res) => {
     }
 
     const user = result.rows[0];
-
     const isPasswordMatch = await bcrypt.compare(password, user.password);
 
     if (!isPasswordMatch) {
@@ -227,16 +313,8 @@ app.post("/api/auth/forgot-password", async (req, res) => {
       [resetToken, resetTokenExpires, email]
     );
 
-    const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5175";
+    const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5174";
     const resetLink = `${frontendUrl}/reset-password/${resetToken}`;
-
-    const transporter = nodemailer.createTransport({
-      service: "gmail",
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS,
-      },
-    });
 
     await transporter.sendMail({
       from: `"SupportAI" <${process.env.EMAIL_USER}>`,
