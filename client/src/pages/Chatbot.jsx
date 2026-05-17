@@ -8,10 +8,19 @@ import {
   Plus,
   Send,
   Ticket,
+  Trash2,
   User,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+
+const API_URL = "http://localhost:5001/api/chat";
+
+const initialBotMessage = {
+  sender: "bot",
+  message: "Hi! I’m your SupportAI assistant. How can I help you today?",
+  created_at: new Date().toISOString(),
+};
 
 function Chatbot() {
   const navigate = useNavigate();
@@ -21,42 +30,37 @@ function Chatbot() {
   const user = JSON.parse(localStorage.getItem("user") || "{}");
 
   const [message, setMessage] = useState("");
+  const [messages, setMessages] = useState([initialBotMessage]);
   const [loading, setLoading] = useState(false);
   const [activeChatId, setActiveChatId] = useState(null);
   const [chatHistory, setChatHistory] = useState([]);
   const [error, setError] = useState("");
   const [ticketMessage, setTicketMessage] = useState("");
-
-  const [messages, setMessages] = useState([
-    {
-      sender: "bot",
-      message: "Hi! I’m your SupportAI assistant. How can I help you today?",
-      created_at: new Date().toISOString(),
-    },
-  ]);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [chatToDelete, setChatToDelete] = useState(null);
 
   const displayName =
     user?.full_name || user?.fullName || user?.name || "Customer";
 
-  const authHeaders = useMemo(() => {
-    return {
+  const authHeaders = useMemo(
+    () => ({
       headers: {
         Authorization: `Bearer ${token}`,
       },
-    };
-  }, [token]);
+    }),
+    [token]
+  );
+
+  const resetAlerts = () => {
+    setError("");
+    setTicketMessage("");
+  };
 
   const fetchChats = useCallback(async () => {
-    if (!token) {
-      return;
-    }
+    if (!token) return;
 
     try {
-      const response = await axios.get(
-        "http://localhost:5001/api/chat/chats",
-        authHeaders
-      );
-
+      const response = await axios.get(`${API_URL}/chats`, authHeaders);
       setChatHistory(response.data.chats || []);
     } catch (err) {
       console.log("Fetch chats error:", err.response?.data || err.message);
@@ -77,30 +81,24 @@ function Chatbot() {
   }, [token, navigate, fetchChats]);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({
-      behavior: "smooth",
-    });
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, loading]);
 
-  const formatTime = (dateValue) => {
-    if (!dateValue) {
-      return "";
-    }
-
-    return new Date(dateValue).toLocaleTimeString([], {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  };
+  const formatTime = (dateValue) =>
+    dateValue
+      ? new Date(dateValue).toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+        })
+      : "";
 
   const loadChatMessages = async (chatId) => {
     try {
-      setError("");
-      setTicketMessage("");
+      resetAlerts();
       setActiveChatId(chatId);
 
       const response = await axios.get(
-        `http://localhost:5001/api/chat/messages/${chatId}`,
+        `${API_URL}/messages/${chatId}`,
         authHeaders
       );
 
@@ -113,27 +111,26 @@ function Chatbot() {
   const handleSendMessage = async (e) => {
     e.preventDefault();
 
-    if (!message.trim() || loading) {
-      return;
-    }
+    if (!message.trim() || loading) return;
 
     const userMessageText = message.trim();
 
-    const userMessage = {
-      sender: "user",
-      message: userMessageText,
-      created_at: new Date().toISOString(),
-    };
+    setMessages((prev) => [
+      ...prev,
+      {
+        sender: "user",
+        message: userMessageText,
+        created_at: new Date().toISOString(),
+      },
+    ]);
 
-    setMessages((prev) => [...prev, userMessage]);
     setMessage("");
     setLoading(true);
-    setError("");
-    setTicketMessage("");
+    resetAlerts();
 
     try {
       const response = await axios.post(
-        "http://localhost:5001/api/chat/message",
+        `${API_URL}/message`,
         {
           message: userMessageText,
           chatId: activeChatId,
@@ -145,13 +142,14 @@ function Chatbot() {
         setActiveChatId(response.data.chatId);
       }
 
-      const botMessage = {
-        sender: "bot",
-        message: response.data.reply,
-        created_at: new Date().toISOString(),
-      };
-
-      setMessages((prev) => [...prev, botMessage]);
+      setMessages((prev) => [
+        ...prev,
+        {
+          sender: "bot",
+          message: response.data.reply,
+          created_at: new Date().toISOString(),
+        },
+      ]);
 
       await fetchChats();
     } catch (err) {
@@ -172,30 +170,55 @@ function Chatbot() {
 
   const handleNewChat = () => {
     setActiveChatId(null);
-    setError("");
-    setTicketMessage("");
     setMessage("");
+    resetAlerts();
 
     setMessages([
       {
-        sender: "bot",
+        ...initialBotMessage,
         message: "New conversation started. How can I help you today?",
         created_at: new Date().toISOString(),
       },
     ]);
   };
 
+  const handleDeleteClick = (chatId) => {
+    setChatToDelete(chatId);
+    setShowDeleteModal(true);
+  };
+
+  const cancelDeleteChat = () => {
+    setShowDeleteModal(false);
+    setChatToDelete(null);
+  };
+
+  const confirmDeleteChat = async () => {
+    if (!chatToDelete) return;
+
+    try {
+      await axios.delete(`${API_URL}/delete/${chatToDelete}`, authHeaders);
+
+      if (activeChatId === chatToDelete) {
+        handleNewChat();
+      }
+
+      await fetchChats();
+      cancelDeleteChat();
+    } catch (err) {
+      setError(err.response?.data?.message || "Failed to delete chat");
+    }
+  };
+
   const handleCreateTicket = async () => {
     try {
-      setError("");
-      setTicketMessage("");
+      resetAlerts();
 
       const lastUserMessage =
         [...messages].reverse().find((item) => item.sender === "user")
           ?.message || "Support request from chatbot";
 
       const response = await axios.post(
-        "http://localhost:5001/api/chat/ticket",
+        `${API_URL}/ticket`,
         {
           subject: "Support request from chatbot",
           description: lastUserMessage,
@@ -211,19 +234,14 @@ function Chatbot() {
 
   const handleLogout = () => {
     localStorage.clear();
-
-    navigate("/login", {
-      replace: true,
-    });
+    navigate("/login", { replace: true });
 
     setTimeout(() => {
       window.location.reload();
     }, 100);
   };
 
-  if (!token) {
-    return null;
-  }
+  if (!token) return null;
 
   return (
     <div className="min-h-screen bg-slate-950 text-white">
@@ -255,7 +273,7 @@ function Chatbot() {
         </Link>
 
         <div className="grid lg:grid-cols-4 gap-6">
-          <div className="lg:col-span-1 bg-slate-900/80 border border-slate-800 rounded-3xl p-5 shadow-xl">
+          <aside className="lg:col-span-1 bg-slate-900/80 border border-slate-800 rounded-3xl p-5 shadow-xl">
             <button
               onClick={handleNewChat}
               className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 py-3 rounded-xl font-semibold transition mb-6"
@@ -294,46 +312,65 @@ function Chatbot() {
               </Link>
             </div>
 
-            <div className="space-y-3 mb-8">
-              <h3 className="text-sm uppercase tracking-wide text-slate-500 font-semibold">
-                Recent Chats
-              </h3>
+           <div className="space-y-3 mb-8">
+  <h3 className="text-sm uppercase tracking-wide text-slate-500 font-semibold">
+    Recent Chats
+  </h3>
 
-              {chatHistory.length === 0 ? (
-                <p className="text-sm text-slate-500">
-                  No previous chats yet.
-                </p>
-              ) : (
-                chatHistory.slice(0, 6).map((chat) => (
-                  <button
-                    key={chat.id}
-                    onClick={() => loadChatMessages(chat.id)}
-                    className={`w-full text-left px-4 py-3 rounded-xl transition ${
-                      activeChatId === chat.id
-                        ? "bg-blue-600/10 text-blue-400 border border-blue-500/30"
-                        : "hover:bg-slate-800 text-slate-300"
-                    }`}
-                  >
-                    <div className="flex items-center gap-2">
-                      <Clock size={15} />
+  {chatHistory.length === 0 ? (
+    <p className="text-sm text-slate-500">
+      No previous chats yet.
+    </p>
+  ) : (
+    chatHistory.slice(0, 6).map((chat) => (
+      <div
+        key={chat.id}
+        className={`flex items-center gap-2 rounded-xl transition ${
+          activeChatId === chat.id
+            ? "bg-blue-600/10 border border-blue-500/30"
+            : "hover:bg-slate-800"
+        }`}
+      >
+        <button
+          type="button"
+          onClick={() => loadChatMessages(chat.id)}
+          className="min-w-0 flex-1 px-4 py-3 text-left"
+        >
+          <div className="flex items-center gap-2 min-w-0">
+            <Clock size={15} className="shrink-0" />
 
-                      <span className="truncate text-sm">{chat.title}</span>
-                    </div>
-                  </button>
-                ))
-              )}
-            </div>
+            <span
+              className={`block truncate text-sm ${
+                activeChatId === chat.id
+                  ? "text-blue-400"
+                  : "text-slate-300"
+              }`}
+            >
+              {chat.title}
+            </span>
+          </div>
+        </button>
 
+        <button
+          type="button"
+          onClick={() => handleDeleteClick(chat.id)}
+          className="shrink-0 mr-3 text-slate-500 hover:text-red-400 transition"
+          title="Delete chat"
+        >
+          <Trash2 size={16} />
+        </button>
+      </div>
+    ))
+  )}
+</div>
             <div className="bg-slate-950 border border-slate-800 rounded-2xl p-4">
               <p className="text-sm text-slate-400 mb-1">Logged in as</p>
-
               <p className="font-semibold">{displayName}</p>
-
               <p className="text-sm text-slate-500 break-all">{user?.email}</p>
             </div>
-          </div>
+          </aside>
 
-          <div className="lg:col-span-3 bg-slate-900/80 border border-slate-800 rounded-3xl shadow-xl overflow-hidden">
+          <main className="lg:col-span-3 bg-slate-900/80 border border-slate-800 rounded-3xl shadow-xl overflow-hidden">
             <div className="bg-gradient-to-r from-blue-600 via-blue-700 to-slate-900 px-6 py-5 flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="w-12 h-12 bg-white/15 rounded-2xl flex items-center justify-center">
@@ -342,7 +379,6 @@ function Chatbot() {
 
                 <div>
                   <h1 className="text-xl font-bold">SupportAI Assistant</h1>
-
                   <p className="text-blue-100 text-sm">
                     Online · AI-powered customer support
                   </p>
@@ -443,29 +479,66 @@ function Chatbot() {
 
               <form
                 onSubmit={handleSendMessage}
-                className="flex items-center gap-3"
+                className="flex items-end gap-3"
               >
-                <input
-                  type="text"
+                <textarea
                   value={message}
-                  onChange={(e) => setMessage(e.target.value)}
+                  onChange={(e) => {
+                    setMessage(e.target.value);
+                    e.target.style.height = "auto";
+                    e.target.style.height = `${e.target.scrollHeight}px`;
+                  }}
                   placeholder="Type your message..."
-                  className="flex-1 bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-white outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30 transition"
+                  rows={1}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                    }
+                  }}
+                  className="flex-1 resize-none overflow-hidden min-h-[52px] max-h-[180px] bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-white outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30 transition"
                 />
 
                 <button
                   type="submit"
                   disabled={loading}
-                  className="bg-blue-600 hover:bg-blue-700 disabled:bg-slate-700 disabled:text-slate-400 px-5 py-3 rounded-xl font-semibold transition flex items-center gap-2"
+                  className="bg-blue-600 hover:bg-blue-700 disabled:bg-slate-700 disabled:text-slate-400 px-5 py-3 rounded-xl font-semibold transition flex items-center gap-2 h-[52px]"
                 >
                   <Send size={18} />
                   <span className="hidden sm:inline">Send</span>
                 </button>
               </form>
             </div>
-          </div>
+          </main>
         </div>
       </div>
+
+      {showDeleteModal && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 px-4">
+          <div className="bg-slate-900 border border-slate-700 rounded-3xl p-6 w-full max-w-md shadow-2xl">
+            <h2 className="text-2xl font-bold mb-3">Delete Chat?</h2>
+
+            <p className="text-slate-400 mb-6">
+              Are you sure you want to permanently delete this chat?
+            </p>
+
+            <div className="flex items-center justify-end gap-3">
+              <button
+                onClick={cancelDeleteChat}
+                className="px-4 py-2 rounded-xl border border-slate-700 text-slate-300 hover:bg-slate-800 transition"
+              >
+                Cancel
+              </button>
+
+              <button
+                onClick={confirmDeleteChat}
+                className="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-700 transition font-semibold"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

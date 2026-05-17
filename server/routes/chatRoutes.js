@@ -240,4 +240,38 @@ router.post("/ticket", verifyToken, async (req, res) => {
   }
 });
 
+router.delete("/delete/:chatId", verifyToken, async (req, res) => {
+  try {
+    const { chatId } = req.params;
+
+    const result = await pool.query(
+      `
+      DELETE FROM chats
+      WHERE id = $1 AND user_id = $2
+      RETURNING id
+      `,
+      [chatId, req.user.id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Chat not found",
+      });
+    }
+
+    return res.json({
+      success: true,
+      message: "Chat deleted successfully",
+    });
+  } catch (error) {
+    console.error("Delete chat error:", error.message);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to delete chat",
+    });
+  }
+});
+
 module.exports = router;
