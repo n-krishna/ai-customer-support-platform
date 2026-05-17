@@ -136,6 +136,7 @@ function Chatbot() {
     try {
       resetAlerts();
       setActiveChatId(chatId);
+      clearSelectedImage();
 
       const response = await axios.get(
         `${API_URL}/messages/${chatId}`,
@@ -156,10 +157,10 @@ function Chatbot() {
     await fetchChats();
   };
 
-  const sendImageMessage = async (userMessageText) => {
+  const sendImageMessage = async (userMessageText, imageFile) => {
     const formData = new FormData();
 
-    formData.append("image", selectedImage);
+    formData.append("image", imageFile);
     formData.append("message", userMessageText || DEFAULT_IMAGE_PROMPT);
     formData.append("chatId", activeChatId || "");
 
@@ -175,7 +176,6 @@ function Chatbot() {
       createMessage("bot", response.data.reply),
     ]);
 
-    clearSelectedImage();
     await updateActiveChat(response.data.chatId);
   };
 
@@ -201,25 +201,28 @@ function Chatbot() {
     e.preventDefault();
 
     const userMessageText = message.trim();
+    const imageFile = selectedImage;
+    const previewUrl = imagePreview;
 
-    if ((!userMessageText && !selectedImage) || loading) return;
+    if ((!userMessageText && !imageFile) || loading) return;
 
     setMessages((prev) => [
       ...prev,
       createMessage(
         "user",
-        selectedImage ? userMessageText || DEFAULT_IMAGE_PROMPT : userMessageText,
-        imagePreview || null
+        imageFile ? userMessageText || DEFAULT_IMAGE_PROMPT : userMessageText,
+        previewUrl || null
       ),
     ]);
 
     setMessage("");
+    clearSelectedImage();
     setLoading(true);
     resetAlerts();
 
     try {
-      if (selectedImage) {
-        await sendImageMessage(userMessageText);
+      if (imageFile) {
+        await sendImageMessage(userMessageText, imageFile);
       } else {
         await sendTextMessage(userMessageText);
       }
