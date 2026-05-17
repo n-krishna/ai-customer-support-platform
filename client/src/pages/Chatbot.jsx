@@ -5,6 +5,8 @@ import {
   Clock,
   LogOut,
   MessageCircle,
+  Mic,
+  MicOff,
   Plus,
   Send,
   Ticket,
@@ -16,22 +18,26 @@ import { Link, useNavigate } from "react-router-dom";
 
 const API_URL = "http://localhost:5001/api/chat";
 
-const initialBotMessage = {
+const createBotMessage = (message) => ({
   sender: "bot",
-  message: "Hi! I’m your SupportAI assistant. How can I help you today?",
+  message,
   created_at: new Date().toISOString(),
-};
+});
 
 function Chatbot() {
   const navigate = useNavigate();
   const messagesEndRef = useRef(null);
+  const recognitionRef = useRef(null);
 
   const token = localStorage.getItem("token");
   const user = JSON.parse(localStorage.getItem("user") || "{}");
 
   const [message, setMessage] = useState("");
-  const [messages, setMessages] = useState([initialBotMessage]);
+  const [messages, setMessages] = useState([
+    createBotMessage("Hi! I’m your SupportAI assistant. How can I help you today?"),
+  ]);
   const [loading, setLoading] = useState(false);
+  const [listening, setListening] = useState(false);
   const [activeChatId, setActiveChatId] = useState(null);
   const [chatHistory, setChatHistory] = useState([]);
   const [error, setError] = useState("");
@@ -91,6 +97,11 @@ function Chatbot() {
           minute: "2-digit",
         })
       : "";
+
+  const resizeTextarea = (element) => {
+    element.style.height = "auto";
+    element.style.height = `${element.scrollHeight}px`;
+  };
 
   const loadChatMessages = async (chatId) => {
     try {
@@ -157,15 +168,60 @@ function Chatbot() {
 
       setMessages((prev) => [
         ...prev,
-        {
-          sender: "bot",
-          message: "Sorry, I could not process that request. Please try again.",
-          created_at: new Date().toISOString(),
-        },
+        createBotMessage("Sorry, I could not process that request. Please try again."),
       ]);
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleVoiceInput = () => {
+    const SpeechRecognition =
+      window.SpeechRecognition || window.webkitSpeechRecognition;
+
+    if (!SpeechRecognition) {
+      setError("Voice input is not supported in this browser. Please use Chrome.");
+      return;
+    }
+
+    if (listening && recognitionRef.current) {
+      recognitionRef.current.stop();
+      setListening(false);
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+
+    recognition.lang = "en-US";
+    recognition.interimResults = true;
+    recognition.continuous = false;
+
+    recognition.onstart = () => {
+      resetAlerts();
+      setListening(true);
+    };
+
+    recognition.onresult = (event) => {
+      let transcript = "";
+
+      for (let i = 0; i < event.results.length; i += 1) {
+        transcript += event.results[i][0].transcript;
+      }
+
+      setMessage(transcript);
+    };
+
+    recognition.onerror = () => {
+      setError("Voice input failed. Please try again.");
+      setListening(false);
+    };
+
+    recognition.onend = () => {
+      setListening(false);
+    };
+
+    recognitionRef.current = recognition;
+    recognition.start();
   };
 
   const handleNewChat = () => {
@@ -174,11 +230,7 @@ function Chatbot() {
     resetAlerts();
 
     setMessages([
-      {
-        ...initialBotMessage,
-        message: "New conversation started. How can I help you today?",
-        created_at: new Date().toISOString(),
-      },
+      createBotMessage("New conversation started. How can I help you today?"),
     ]);
   };
 
@@ -312,57 +364,56 @@ function Chatbot() {
               </Link>
             </div>
 
-           <div className="space-y-3 mb-8">
-  <h3 className="text-sm uppercase tracking-wide text-slate-500 font-semibold">
-    Recent Chats
-  </h3>
+            <div className="space-y-3 mb-8">
+              <h3 className="text-sm uppercase tracking-wide text-slate-500 font-semibold">
+                Recent Chats
+              </h3>
 
-  {chatHistory.length === 0 ? (
-    <p className="text-sm text-slate-500">
-      No previous chats yet.
-    </p>
-  ) : (
-    chatHistory.slice(0, 6).map((chat) => (
-      <div
-        key={chat.id}
-        className={`flex items-center gap-2 rounded-xl transition ${
-          activeChatId === chat.id
-            ? "bg-blue-600/10 border border-blue-500/30"
-            : "hover:bg-slate-800"
-        }`}
-      >
-        <button
-          type="button"
-          onClick={() => loadChatMessages(chat.id)}
-          className="min-w-0 flex-1 px-4 py-3 text-left"
-        >
-          <div className="flex items-center gap-2 min-w-0">
-            <Clock size={15} className="shrink-0" />
+              {chatHistory.length === 0 ? (
+                <p className="text-sm text-slate-500">No previous chats yet.</p>
+              ) : (
+                chatHistory.slice(0, 6).map((chat) => (
+                  <div
+                    key={chat.id}
+                    className={`flex items-center gap-2 rounded-xl transition ${
+                      activeChatId === chat.id
+                        ? "bg-blue-600/10 border border-blue-500/30"
+                        : "hover:bg-slate-800"
+                    }`}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => loadChatMessages(chat.id)}
+                      className="min-w-0 flex-1 px-4 py-3 text-left"
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <Clock size={15} className="shrink-0" />
 
-            <span
-              className={`block truncate text-sm ${
-                activeChatId === chat.id
-                  ? "text-blue-400"
-                  : "text-slate-300"
-              }`}
-            >
-              {chat.title}
-            </span>
-          </div>
-        </button>
+                        <span
+                          className={`block truncate text-sm ${
+                            activeChatId === chat.id
+                              ? "text-blue-400"
+                              : "text-slate-300"
+                          }`}
+                        >
+                          {chat.title}
+                        </span>
+                      </div>
+                    </button>
 
-        <button
-          type="button"
-          onClick={() => handleDeleteClick(chat.id)}
-          className="shrink-0 mr-3 text-slate-500 hover:text-red-400 transition"
-          title="Delete chat"
-        >
-          <Trash2 size={16} />
-        </button>
-      </div>
-    ))
-  )}
-</div>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteClick(chat.id)}
+                      className="shrink-0 mr-3 text-slate-500 hover:text-red-400 transition"
+                      title="Delete chat"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+
             <div className="bg-slate-950 border border-slate-800 rounded-2xl p-4">
               <p className="text-sm text-slate-400 mb-1">Logged in as</p>
               <p className="font-semibold">{displayName}</p>
@@ -485,10 +536,11 @@ function Chatbot() {
                   value={message}
                   onChange={(e) => {
                     setMessage(e.target.value);
-                    e.target.style.height = "auto";
-                    e.target.style.height = `${e.target.scrollHeight}px`;
+                    resizeTextarea(e.target);
                   }}
-                  placeholder="Type your message..."
+                  placeholder={
+                    listening ? "Listening..." : "Type your message..."
+                  }
                   rows={1}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && !e.shiftKey) {
@@ -497,6 +549,19 @@ function Chatbot() {
                   }}
                   className="flex-1 resize-none overflow-hidden min-h-[52px] max-h-[180px] bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-white outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30 transition"
                 />
+
+                <button
+                  type="button"
+                  onClick={handleVoiceInput}
+                  className={`h-[52px] px-4 rounded-xl border transition flex items-center justify-center ${
+                    listening
+                      ? "bg-red-600 border-red-500 text-white"
+                      : "bg-slate-950 border-slate-700 text-slate-300 hover:border-blue-500 hover:text-white"
+                  }`}
+                  title="Voice input"
+                >
+                  {listening ? <MicOff size={18} /> : <Mic size={18} />}
+                </button>
 
                 <button
                   type="submit"
