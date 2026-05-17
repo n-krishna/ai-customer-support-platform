@@ -3,6 +3,7 @@ import {
   ArrowLeft,
   Bot,
   Clock,
+  Image,
   LogOut,
   MessageCircle,
   Mic,
@@ -12,15 +13,19 @@ import {
   Ticket,
   Trash2,
   User,
+  X,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 const API_URL = "http://localhost:5001/api/chat";
+const DEFAULT_IMAGE_PROMPT =
+  "Analyze this screenshot. Identify the issue, explain the cause, and provide step-by-step instructions to fix it.";
 
-const createBotMessage = (message) => ({
-  sender: "bot",
+const createMessage = (sender, message, image = null) => ({
+  sender,
   message,
+  image,
   created_at: new Date().toISOString(),
 });
 
@@ -28,13 +33,17 @@ function Chatbot() {
   const navigate = useNavigate();
   const messagesEndRef = useRef(null);
   const recognitionRef = useRef(null);
+  const fileInputRef = useRef(null);
 
   const token = localStorage.getItem("token");
   const user = JSON.parse(localStorage.getItem("user") || "{}");
 
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState([
-    createBotMessage("Hi! I’m your SupportAI assistant. How can I help you today?"),
+    createMessage(
+      "bot",
+      "Hi! I’m your SupportAI assistant. How can I help you today?"
+    ),
   ]);
   const [loading, setLoading] = useState(false);
   const [listening, setListening] = useState(false);
@@ -42,6 +51,8 @@ function Chatbot() {
   const [chatHistory, setChatHistory] = useState([]);
   const [error, setError] = useState("");
   const [ticketMessage, setTicketMessage] = useState("");
+  const [selectedImage, setSelectedImage] = useState(null);
+  const [imagePreview, setImagePreview] = useState("");
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [chatToDelete, setChatToDelete] = useState(null);
 
@@ -103,6 +114,24 @@ function Chatbot() {
     element.style.height = `${element.scrollHeight}px`;
   };
 
+  const clearSelectedImage = () => {
+    setSelectedImage(null);
+    setImagePreview("");
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
+  const handleImageSelect = (e) => {
+    const file = e.target.files?.[0];
+
+    if (!file) return;
+
+    setSelectedImage(file);
+    setImagePreview(URL.createObjectURL(file));
+  };
+
   const loadChatMessages = async (chatId) => {
     try {
       resetAlerts();
@@ -119,20 +148,69 @@ function Chatbot() {
     }
   };
 
-  const handleSendMessage = async (e) => {
-    e.preventDefault();
+  const updateActiveChat = async (chatId) => {
+    if (!activeChatId) {
+      setActiveChatId(chatId);
+    }
 
-    if (!message.trim() || loading) return;
+    await fetchChats();
+  };
 
-    const userMessageText = message.trim();
+  const sendImageMessage = async (userMessageText) => {
+    const formData = new FormData();
+
+    formData.append("image", selectedImage);
+    formData.append("message", userMessageText || DEFAULT_IMAGE_PROMPT);
+    formData.append("chatId", activeChatId || "");
+
+    const response = await axios.post(`${API_URL}/image`, formData, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "multipart/form-data",
+      },
+    });
 
     setMessages((prev) => [
       ...prev,
+      createMessage("bot", response.data.reply),
+    ]);
+
+    clearSelectedImage();
+    await updateActiveChat(response.data.chatId);
+  };
+
+  const sendTextMessage = async (userMessageText) => {
+    const response = await axios.post(
+      `${API_URL}/message`,
       {
-        sender: "user",
         message: userMessageText,
-        created_at: new Date().toISOString(),
+        chatId: activeChatId,
       },
+      authHeaders
+    );
+
+    setMessages((prev) => [
+      ...prev,
+      createMessage("bot", response.data.reply),
+    ]);
+
+    await updateActiveChat(response.data.chatId);
+  };
+
+  const handleSendMessage = async (e) => {
+    e.preventDefault();
+
+    const userMessageText = message.trim();
+
+    if ((!userMessageText && !selectedImage) || loading) return;
+
+    setMessages((prev) => [
+      ...prev,
+      createMessage(
+        "user",
+        selectedImage ? userMessageText || DEFAULT_IMAGE_PROMPT : userMessageText,
+        imagePreview || null
+      ),
     ]);
 
     setMessage("");
@@ -140,35 +218,20 @@ function Chatbot() {
     resetAlerts();
 
     try {
-      const response = await axios.post(
-        `${API_URL}/message`,
-        {
-          message: userMessageText,
-          chatId: activeChatId,
-        },
-        authHeaders
-      );
-
-      if (!activeChatId) {
-        setActiveChatId(response.data.chatId);
+      if (selectedImage) {
+        await sendImageMessage(userMessageText);
+      } else {
+        await sendTextMessage(userMessageText);
       }
-
-      setMessages((prev) => [
-        ...prev,
-        {
-          sender: "bot",
-          message: response.data.reply,
-          created_at: new Date().toISOString(),
-        },
-      ]);
-
-      await fetchChats();
     } catch (err) {
       setError(err.response?.data?.message || "Failed to send message");
 
       setMessages((prev) => [
         ...prev,
-        createBotMessage("Sorry, I could not process that request. Please try again."),
+        createMessage(
+          "bot",
+          "Sorry, I could not process that request. Please try again."
+        ),
       ]);
     } finally {
       setLoading(false);
@@ -202,17 +265,15 @@ function Chatbot() {
     };
 
     recognition.onresult = (event) => {
-      let transcript = "";
-
-      for (let i = 0; i < event.results.length; i += 1) {
-        transcript += event.results[i][0].transcript;
-      }
+      const transcript = Array.from(event.results)
+        .map((result) => result[0].transcript)
+        .join("");
 
       setMessage(transcript);
     };
 
-    recognition.onerror = () => {
-      setError("Voice input failed. Please try again.");
+    recognition.onerror = (event) => {
+      setError(`Voice input failed: ${event.error}`);
       setListening(false);
     };
 
@@ -227,10 +288,11 @@ function Chatbot() {
   const handleNewChat = () => {
     setActiveChatId(null);
     setMessage("");
+    clearSelectedImage();
     resetAlerts();
 
     setMessages([
-      createBotMessage("New conversation started. How can I help you today?"),
+      createMessage("bot", "New conversation started. How can I help you today?"),
     ]);
   };
 
@@ -491,6 +553,14 @@ function Chatbot() {
                     <p className="leading-relaxed whitespace-pre-wrap">
                       {item.message}
                     </p>
+
+                    {item.image && (
+                      <img
+                        src={item.image}
+                        alt="Uploaded"
+                        className="mt-3 max-w-xs rounded-xl border border-slate-700"
+                      />
+                    )}
                   </div>
                 </div>
               ))}
@@ -528,19 +598,43 @@ function Chatbot() {
                 ))}
               </div>
 
+              {imagePreview && (
+                <div className="relative w-32 mb-4">
+                  <img
+                    src={imagePreview}
+                    alt="Selected preview"
+                    className="w-32 h-24 object-cover rounded-xl border border-slate-700"
+                  />
+
+                  <button
+                    type="button"
+                    onClick={clearSelectedImage}
+                    className="absolute -top-2 -right-2 bg-red-600 text-white rounded-full p-1"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              )}
+
               <form
                 onSubmit={handleSendMessage}
                 className="flex items-end gap-3"
               >
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImageSelect}
+                  className="hidden"
+                />
+
                 <textarea
                   value={message}
                   onChange={(e) => {
                     setMessage(e.target.value);
                     resizeTextarea(e.target);
                   }}
-                  placeholder={
-                    listening ? "Listening..." : "Type your message..."
-                  }
+                  placeholder={listening ? "Listening..." : "Type your message..."}
                   rows={1}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && !e.shiftKey) {
@@ -549,6 +643,15 @@ function Chatbot() {
                   }}
                   className="flex-1 resize-none overflow-hidden min-h-[52px] max-h-[180px] bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-white outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30 transition"
                 />
+
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="h-[52px] px-4 rounded-xl border bg-slate-950 border-slate-700 text-slate-300 hover:border-blue-500 hover:text-white transition"
+                  title="Upload image"
+                >
+                  <Image size={18} />
+                </button>
 
                 <button
                   type="button"

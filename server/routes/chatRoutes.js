@@ -1,6 +1,12 @@
-const express = require("express");
-const jwt = require("jsonwebtoken");
 const axios = require("axios");
+const express = require("express");
+const multer = require("multer");
+const fs = require("fs");
+
+const upload = multer({
+  dest: "uploads/",
+});
+const jwt = require("jsonwebtoken");
 
 const pool = require("../db");
 
@@ -273,5 +279,102 @@ router.delete("/delete/:chatId", verifyToken, async (req, res) => {
     });
   }
 });
+
+router.post(
+  "/image",
+  verifyToken,
+  upload.single("image"),
+  async (req, res) => {
+    try {
+      const userMessage =
+        req.body.message?.trim() ||
+        "Analyze this image and explain what you see.";
+
+      let activeChatId = req.body.chatId || null;
+
+      if (!req.file) {
+        return res.status(400).json({
+          success: false,
+          message: "Image file is required",
+        });
+      }
+
+      if (!activeChatId) {
+        const chatResult = await pool.query(
+          `
+          INSERT INTO chats (user_id, title)
+          VALUES ($1, $2)
+          RETURNING id
+          `,
+          [req.user.id, "Image Analysis"]
+        );
+
+        activeChatId = chatResult.rows[0].id;
+      }
+
+      const imageBuffer = fs.readFileSync(req.file.path);
+      const base64Image = imageBuffer.toString("base64");
+
+      await pool.query(
+        `
+        INSERT INTO messages (chat_id, sender, message)
+        VALUES ($1, $2, $3)
+        `,
+        [activeChatId, "user", userMessage]
+      );
+
+      const ollamaResponse = await axios.post(
+        "http://127.0.0.1:11434/api/generate",
+        {
+          model: "llava",
+          prompt: userMessage,
+          images: [base64Image],
+          stream: false,
+        },
+        {
+          timeout: 120000,
+        }
+      );
+
+      const botReply =
+        ollamaResponse.data?.response ||
+        "Sorry, I could not analyze this image.";
+
+      await pool.query(
+        `
+        INSERT INTO messages (chat_id, sender, message)
+        VALUES ($1, $2, $3)
+        `,
+        [activeChatId, "bot", botReply]
+      );
+
+      if (req.file?.path && fs.existsSync(req.file.path)) {
+        fs.unlinkSync(req.file.path);
+      }
+
+      return res.json({
+        success: true,
+        chatId: activeChatId,
+        reply: botReply,
+      });
+    } catch (error) {
+      console.error(
+        "Image analysis error:",
+        error.response?.data || error.message
+      );
+
+      if (req.file?.path && fs.existsSync(req.file.path)) {
+        fs.unlinkSync(req.file.path);
+      }
+
+      return res.status(500).json({
+        success: false,
+        message:
+          "Image analysis failed. Make sure Ollama is running and llava is installed.",
+      });
+    }
+  }
+);
+     
 
 module.exports = router;
