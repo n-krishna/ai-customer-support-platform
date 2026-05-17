@@ -1,19 +1,15 @@
 const express = require("express");
 const jwt = require("jsonwebtoken");
-const OpenAI = require("openai");
+const axios = require("axios");
 
 const pool = require("../db");
 
 const router = express.Router();
 
-const openai = new OpenAI({
-  baseURL: "https://openrouter.ai/api/v1",
-  apiKey: process.env.OPENROUTER_API_KEY,
-  defaultHeaders: {
-    "HTTP-Referer": process.env.FRONTEND_URL || "http://localhost:5173",
-    "X-Title": "SupportAI",
-  },
-});
+const OLLAMA_URL =
+  process.env.OLLAMA_URL || "http://localhost:11434/api/chat";
+
+const OLLAMA_MODEL = process.env.OLLAMA_MODEL || "llama3.2";
 
 const verifyToken = (req, res, next) => {
   const authHeader = req.headers.authorization;
@@ -40,13 +36,6 @@ router.post("/message", verifyToken, async (req, res) => {
   try {
     const { message, chatId } = req.body;
     const userMessage = message?.trim();
-
-    if (!process.env.OPENROUTER_API_KEY) {
-      return res.status(500).json({
-        success: false,
-        message: "OpenRouter API key is missing in .env file",
-      });
-    }
 
     if (!userMessage) {
       return res.status(400).json({
@@ -99,20 +88,27 @@ router.post("/message", verifyToken, async (req, res) => {
       content: item.message,
     }));
 
-    const completion = await openai.chat.completions.create({
-      model: "openrouter/free",
-      messages: [
-        {
-          role: "system",
-          content:
-            "You are SupportAI, a professional AI customer support assistant. Reply naturally like ChatGPT based on the user's prompt. Be clear, friendly, and concise.",
-        },
-        ...conversationMessages,
-      ],
-    });
+    const ollamaResponse = await axios.post(
+      OLLAMA_URL,
+      {
+        model: OLLAMA_MODEL,
+        messages: [
+          {
+            role: "system",
+            content:
+              "You are SupportAI, a professional AI customer support assistant. Reply naturally like ChatGPT based on the user's prompt. Help with account issues, troubleshooting, billing, tickets, profile updates, and general questions. Be clear, friendly, and concise. If the issue requires human support, suggest creating a support ticket.",
+          },
+          ...conversationMessages,
+        ],
+        stream: false,
+      },
+      {
+        timeout: 120000,
+      }
+    );
 
     const botReply =
-      completion.choices?.[0]?.message?.content ||
+      ollamaResponse.data?.message?.content ||
       "Sorry, I could not generate a response.";
 
     await pool.query(
@@ -129,14 +125,12 @@ router.post("/message", verifyToken, async (req, res) => {
       reply: botReply,
     });
   } catch (error) {
-    console.error("AI chatbot error:", error);
+    console.error("Ollama chatbot error:", error.message);
 
     return res.status(500).json({
       success: false,
       message:
-        error?.response?.data?.error?.message ||
-        error?.message ||
-        "AI response failed. Check OpenRouter API key or backend logs.",
+        "AI response failed. Make sure Ollama is running and the model is installed.",
     });
   }
 });
@@ -157,7 +151,9 @@ router.get("/chats", verifyToken, async (req, res) => {
       success: true,
       chats: result.rows,
     });
-  } catch {
+  } catch (error) {
+    console.error("Fetch chats error:", error.message);
+
     return res.status(500).json({
       success: false,
       message: "Failed to fetch chats",
@@ -199,7 +195,9 @@ router.get("/messages/:chatId", verifyToken, async (req, res) => {
       success: true,
       messages: result.rows,
     });
-  } catch {
+  } catch (error) {
+    console.error("Fetch messages error:", error.message);
+
     return res.status(500).json({
       success: false,
       message: "Failed to fetch messages",
@@ -232,10 +230,12 @@ router.post("/ticket", verifyToken, async (req, res) => {
       message: "Support ticket created successfully",
       ticket: result.rows[0],
     });
-  } catch {
+  } catch (error) {
+    console.error("Create ticket error:", error.message);
+
     return res.status(500).json({
       success: false,
-      message: "Failed to create support ticket",
+      message: "Failed to create ticket",
     });
   }
 });
