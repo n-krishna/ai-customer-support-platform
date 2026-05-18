@@ -34,9 +34,7 @@ const verifyToken = (req, res, next) => {
 
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-
     req.user = decoded;
-
     next();
   } catch {
     return res.status(403).json({
@@ -48,12 +46,15 @@ const verifyToken = (req, res, next) => {
 
 const transporter = nodemailer.createTransport({
   service: "gmail",
-
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS,
   },
 });
+
+const generateOtp = () => {
+  return Math.floor(100000 + Math.random() * 900000).toString();
+};
 
 router.post("/register", async (req, res) => {
   try {
@@ -79,17 +80,10 @@ router.post("/register", async (req, res) => {
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
-
-    const otp = Math.floor(
-      100000 + Math.random() * 900000
-    ).toString();
-
+    const otp = generateOtp();
     const otpExpires = new Date(Date.now() + 10 * 60 * 1000);
 
-    await pool.query(
-      "DELETE FROM pending_users WHERE email = $1",
-      [email]
-    );
+    await pool.query("DELETE FROM pending_users WHERE email = $1", [email]);
 
     await pool.query(
       `
@@ -100,11 +94,12 @@ router.post("/register", async (req, res) => {
         dob,
         password,
         otp,
-        otp_expires
+        otp_expires,
+        role
       )
-      VALUES ($1, $2, $3, $4, $5, $6)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
       `,
-      [fullName, email, dob, hashedPassword, otp, otpExpires]
+      [fullName, email, dob, hashedPassword, otp, otpExpires, "customer"]
     );
 
     await transporter.sendMail({
@@ -129,6 +124,85 @@ router.post("/register", async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Server error during registration",
+    });
+  }
+});
+
+router.post("/admin-register", async (req, res) => {
+  try {
+    const { fullName, email, password, adminSecret } = req.body;
+
+    if (!fullName || !email || !password || !adminSecret) {
+      return res.status(400).json({
+        success: false,
+        message: "All fields are required",
+      });
+    }
+
+    if (adminSecret !== process.env.ADMIN_SECRET) {
+      return res.status(403).json({
+        success: false,
+        message: "Invalid admin registration code",
+      });
+    }
+
+    const existingUser = await pool.query(
+      "SELECT id FROM users WHERE email = $1",
+      [email]
+    );
+
+    if (existingUser.rows.length > 0) {
+      return res.status(409).json({
+        success: false,
+        message: "Account already exists with this email",
+      });
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const otp = generateOtp();
+    const otpExpires = new Date(Date.now() + 10 * 60 * 1000);
+
+    await pool.query("DELETE FROM pending_users WHERE email = $1", [email]);
+
+    await pool.query(
+      `
+      INSERT INTO pending_users
+      (
+        full_name,
+        email,
+        dob,
+        password,
+        otp,
+        otp_expires,
+        role
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      `,
+      [fullName, email, null, hashedPassword, otp, otpExpires, "admin"]
+    );
+
+    await transporter.sendMail({
+      from: `"SupportAI" <${process.env.EMAIL_USER}>`,
+      to: email,
+      subject: "SupportAI Admin Verification OTP",
+      html: `
+        <h2>Admin Email Verification</h2>
+        <p>Your admin verification OTP code is:</p>
+        <h1>${otp}</h1>
+        <p>This OTP expires in 10 minutes.</p>
+      `,
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Admin OTP sent to your email",
+    });
+  } catch (error) {
+    console.error("Admin register error:", error.message);
+
+    return res.status(500).json({
+      success: false,
+      message: "Admin registration failed",
     });
   }
 });
@@ -179,21 +253,24 @@ router.post("/verify-otp", async (req, res) => {
         full_name,
         email,
         dob,
-        password
+        password,
+        role
       )
-      VALUES ($1, $2, $3, $4)
+      VALUES ($1, $2, $3, $4, $5)
       RETURNING id, full_name, email, dob, role, created_at
       `,
-      [user.full_name, user.email, user.dob, user.password]
+      [
+        user.full_name,
+        user.email,
+        user.dob,
+        user.password,
+        user.role || "customer",
+      ]
     );
 
-    await pool.query(
-      "DELETE FROM pending_users WHERE email = $1",
-      [email]
-    );
+    await pool.query("DELETE FROM pending_users WHERE email = $1", [email]);
 
     const newUser = result.rows[0];
-
     const token = generateToken(newUser);
 
     res.status(201).json({
@@ -223,10 +300,9 @@ router.post("/login", async (req, res) => {
       });
     }
 
-    const result = await pool.query(
-      "SELECT * FROM users WHERE email = $1",
-      [email]
-    );
+    const result = await pool.query("SELECT * FROM users WHERE email = $1", [
+      email,
+    ]);
 
     if (result.rows.length === 0) {
       return res.status(401).json({
@@ -236,11 +312,7 @@ router.post("/login", async (req, res) => {
     }
 
     const user = result.rows[0];
-
-    const isPasswordMatch = await bcrypt.compare(
-      password,
-      user.password
-    );
+    const isPasswordMatch = await bcrypt.compare(password, user.password);
 
     if (!isPasswordMatch) {
       return res.status(401).json({
@@ -378,10 +450,7 @@ router.post("/send-email-change-otp", verifyToken, async (req, res) => {
       });
     }
 
-    const otp = Math.floor(
-      100000 + Math.random() * 900000
-    ).toString();
-
+    const otp = generateOtp();
     const otpExpires = new Date(Date.now() + 10 * 60 * 1000);
 
     await pool.query(
@@ -433,10 +502,9 @@ router.post("/verify-email-change-otp", verifyToken, async (req, res) => {
       });
     }
 
-    const result = await pool.query(
-      "SELECT * FROM users WHERE id = $1",
-      [req.user.id]
-    );
+    const result = await pool.query("SELECT * FROM users WHERE id = $1", [
+      req.user.id,
+    ]);
 
     if (result.rows.length === 0) {
       return res.status(404).json({
@@ -483,7 +551,6 @@ router.post("/verify-email-change-otp", verifyToken, async (req, res) => {
     );
 
     const updatedUser = updatedUserResult.rows[0];
-
     const newToken = generateToken(updatedUser);
 
     res.json({
@@ -520,10 +587,9 @@ router.post("/forgot-password", async (req, res) => {
       });
     }
 
-    const userResult = await pool.query(
-      "SELECT * FROM users WHERE email = $1",
-      [email]
-    );
+    const userResult = await pool.query("SELECT * FROM users WHERE email = $1", [
+      email,
+    ]);
 
     if (userResult.rows.length === 0) {
       return res.status(404).json({
@@ -533,7 +599,6 @@ router.post("/forgot-password", async (req, res) => {
     }
 
     const resetToken = crypto.randomBytes(32).toString("hex");
-
     const resetTokenExpires = new Date(Date.now() + 15 * 60 * 1000);
 
     await pool.query(
@@ -547,9 +612,7 @@ router.post("/forgot-password", async (req, res) => {
       [resetToken, resetTokenExpires, email]
     );
 
-    const frontendUrl =
-      process.env.FRONTEND_URL || "http://localhost:5174";
-
+    const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5174";
     const resetLink = `${frontendUrl}/reset-password/${resetToken}`;
 
     await transporter.sendMail({
@@ -638,70 +701,6 @@ router.post("/reset-password/:token", async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Server error resetting password",
-    });
-  }
-});
-
-router.post("/admin-register", async (req, res) => {
-  try {
-    const { fullName, email, password, adminSecret } = req.body;
-
-    if (!fullName || !email || !password || !adminSecret) {
-      return res.status(400).json({
-        success: false,
-        message: "All fields are required",
-      });
-    }
-
-    if (adminSecret !== process.env.ADMIN_SECRET) {
-      return res.status(403).json({
-        success: false,
-        message: "Invalid admin registration code",
-      });
-    }
-
-    const existingUser = await pool.query(
-      `
-      SELECT id
-      FROM users
-      WHERE email = $1
-      `,
-      [email]
-    );
-
-    if (existingUser.rows.length > 0) {
-      return res.status(409).json({
-        success: false,
-        message: "Account already exists with this email",
-      });
-    }
-
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    const result = await pool.query(
-      `
-      INSERT INTO users (full_name, email, password, role)
-      VALUES ($1, $2, $3, $4)
-      RETURNING id, full_name, email, role
-      `,
-      [fullName, email, hashedPassword, "admin"]
-    );
-
-    const user = result.rows[0];
-    const token = generateToken(user);
-
-    return res.status(201).json({
-      success: true,
-      message: "Admin account created successfully",
-      token,
-      user,
-    });
-  } catch (error) {
-    console.error("Admin register error:", error.message);
-
-    return res.status(500).json({
-      success: false,
-      message: "Admin registration failed",
     });
   }
 });
