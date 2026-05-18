@@ -8,6 +8,7 @@ import CustomerDashboard from "./pages/CustomerDashboard";
 import ForgotPassword from "./pages/ForgotPassword";
 import Home from "./pages/Home";
 import Login from "./pages/Login";
+import MyTickets from "./pages/MyTickets";
 import Profile from "./pages/Profile";
 import Register from "./pages/Register";
 import ResetPassword from "./pages/ResetPassword";
@@ -60,6 +61,15 @@ function App() {
             </ProtectedRoute>
           }
         />
+
+        <Route
+  path="/tickets"
+  element={
+    <ProtectedRoute>
+      <MyTickets />
+    </ProtectedRoute>
+  }
+/>
 
         <Route
           path="/chat"
