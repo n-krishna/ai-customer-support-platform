@@ -642,4 +642,68 @@ router.post("/reset-password/:token", async (req, res) => {
   }
 });
 
+router.post("/admin-register", async (req, res) => {
+  try {
+    const { fullName, email, password, adminSecret } = req.body;
+
+    if (!fullName || !email || !password || !adminSecret) {
+      return res.status(400).json({
+        success: false,
+        message: "All fields are required",
+      });
+    }
+
+    if (adminSecret !== process.env.ADMIN_SECRET) {
+      return res.status(403).json({
+        success: false,
+        message: "Invalid admin registration code",
+      });
+    }
+
+    const existingUser = await pool.query(
+      `
+      SELECT id
+      FROM users
+      WHERE email = $1
+      `,
+      [email]
+    );
+
+    if (existingUser.rows.length > 0) {
+      return res.status(409).json({
+        success: false,
+        message: "Account already exists with this email",
+      });
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    const result = await pool.query(
+      `
+      INSERT INTO users (full_name, email, password, role)
+      VALUES ($1, $2, $3, $4)
+      RETURNING id, full_name, email, role
+      `,
+      [fullName, email, hashedPassword, "admin"]
+    );
+
+    const user = result.rows[0];
+    const token = generateToken(user);
+
+    return res.status(201).json({
+      success: true,
+      message: "Admin account created successfully",
+      token,
+      user,
+    });
+  } catch (error) {
+    console.error("Admin register error:", error.message);
+
+    return res.status(500).json({
+      success: false,
+      message: "Admin registration failed",
+    });
+  }
+});
+
 module.exports = router;

@@ -3,41 +3,57 @@ import { Link } from "react-router-dom";
 function Home() {
   return (
     <div className="min-h-screen bg-slate-950 text-white">
-      {/* Navbar */}
-      <nav className="flex items-center justify-between px-6 md:px-12 py-5 bg-slate-950 border-b border-slate-800">
-        <div className="flex items-center gap-2">
-          <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center font-bold text-xl">
-            AI
+      <nav className="sticky top-0 z-50 bg-slate-950/90 backdrop-blur border-b border-slate-800">
+        <div className="max-w-7xl mx-auto px-6 md:px-10 py-4 flex items-center justify-between">
+          <Link to="/" className="flex items-center gap-3">
+            <div className="w-11 h-11 bg-blue-600 rounded-xl flex items-center justify-center font-bold text-xl">
+              AI
+            </div>
+
+            <span className="text-2xl font-bold tracking-tight">
+              SupportAI
+            </span>
+          </Link>
+
+          <div className="hidden lg:flex items-center gap-8 text-sm text-slate-300">
+            <a href="#features" className="hover:text-white transition">
+              Features
+            </a>
+
+            <a href="#how-it-works" className="hover:text-white transition">
+              How It Works
+            </a>
+
+            <Link to="/admin-login" className="hover:text-white transition">
+              Admin Portal
+            </Link>
           </div>
 
-          <h1 className="text-2xl font-bold">SupportAI</h1>
-        </div>
+          <div className="flex items-center gap-3">
+            <Link
+              to="/login"
+              className="hidden sm:inline-flex border border-slate-700 hover:border-blue-500 hover:bg-slate-900 px-4 py-2 rounded-xl text-sm font-medium text-slate-300 hover:text-white transition"
+            >
+              Customer Login
+            </Link>
 
-        <div className="hidden md:flex items-center gap-8 text-slate-300">
-          <a href="#features" className="hover:text-white">
-            Features
-          </a>
+            <Link
+              to="/admin-login"
+              className="hidden md:inline-flex border border-slate-700 hover:border-blue-500 hover:bg-slate-900 px-4 py-2 rounded-xl text-sm font-medium text-slate-300 hover:text-white transition"
+            >
+              Admin Login
+            </Link>
 
-          <a href="#how-it-works" className="hover:text-white">
-            How It Works
-          </a>
-        </div>
-
-        <div className="flex items-center gap-4">
-          <Link to="/login" className="text-slate-300 hover:text-white">
-            Login
-          </Link>
-
-          <Link
-            to="/register"
-            className="bg-blue-600 hover:bg-blue-700 px-5 py-2 rounded-lg font-medium"
-          >
-            Get Started
-          </Link>
+            <Link
+              to="/register"
+              className="bg-blue-600 hover:bg-blue-700 px-5 py-2 rounded-xl text-sm font-semibold transition shadow-lg shadow-blue-600/20"
+            >
+              Get Started
+            </Link>
+          </div>
         </div>
       </nav>
 
-      {/* Hero Section */}
       <section className="px-6 md:px-12 py-20 md:py-28 text-center">
         <div className="max-w-5xl mx-auto">
           <p className="text-blue-400 font-semibold mb-4">
@@ -57,23 +73,22 @@ function Home() {
 
           <div className="flex flex-col sm:flex-row justify-center gap-4">
             <Link
-              to="/chatbot"
-              className="bg-blue-600 hover:bg-blue-700 px-8 py-4 rounded-xl font-semibold"
+              to="/register"
+              className="bg-blue-600 hover:bg-blue-700 px-8 py-4 rounded-xl font-semibold transition"
             >
-              Try Demo Chatbot
+              Customer Registration
             </Link>
 
             <Link
-              to="/admin"
-              className="border border-slate-600 hover:bg-slate-800 px-8 py-4 rounded-xl font-semibold"
+              to="/admin-register"
+              className="border border-slate-600 hover:border-blue-500 hover:bg-slate-900 px-8 py-4 rounded-xl font-semibold transition"
             >
-              View Dashboard
+              Admin Registration
             </Link>
           </div>
         </div>
       </section>
 
-      {/* Demo Chat Preview */}
       <section className="px-6 md:px-12 pb-20">
         <div className="max-w-5xl mx-auto bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden">
           <div className="bg-slate-800 px-6 py-4 flex items-center gap-3">
@@ -110,7 +125,6 @@ function Home() {
         </div>
       </section>
 
-      {/* Features */}
       <section id="features" className="px-6 md:px-12 py-20 bg-slate-900">
         <div className="max-w-6xl mx-auto">
           <div className="text-center mb-14">
@@ -125,76 +139,29 @@ function Home() {
           </div>
 
           <div className="grid md:grid-cols-3 gap-8">
-            <div className="bg-slate-950 border border-slate-800 p-8 rounded-2xl">
-              <div className="text-4xl mb-5">🤖</div>
+            {[
+              ["🤖", "AI Chatbot", "Automatically answers common customer questions using AI-powered responses."],
+              ["🎫", "Ticket Management", "Create, track, prioritize, and resolve customer support tickets from one dashboard."],
+              ["📊", "Admin Analytics", "Monitor ticket volume, AI resolution rate, open issues, and support performance."],
+              ["🔐", "Secure Login", "Supports user authentication and role-based access for customers and admins."],
+              ["⚡", "Fast Responses", "Reduce customer wait times by giving instant answers to common issues."],
+              ["🧠", "Context Memory", "Keeps track of conversation history to provide better and more relevant replies."],
+            ].map(([icon, title, text]) => (
+              <div
+                key={title}
+                className="bg-slate-950 border border-slate-800 p-8 rounded-2xl hover:border-blue-500/50 transition"
+              >
+                <div className="text-4xl mb-5">{icon}</div>
 
-              <h4 className="text-xl font-bold mb-3">AI Chatbot</h4>
+                <h4 className="text-xl font-bold mb-3">{title}</h4>
 
-              <p className="text-slate-400">
-                Automatically answers common customer questions using AI-powered
-                responses.
-              </p>
-            </div>
-
-            <div className="bg-slate-950 border border-slate-800 p-8 rounded-2xl">
-              <div className="text-4xl mb-5">🎫</div>
-
-              <h4 className="text-xl font-bold mb-3">Ticket Management</h4>
-
-              <p className="text-slate-400">
-                Create, track, prioritize, and resolve customer support tickets
-                from one dashboard.
-              </p>
-            </div>
-
-            <div className="bg-slate-950 border border-slate-800 p-8 rounded-2xl">
-              <div className="text-4xl mb-5">📊</div>
-
-              <h4 className="text-xl font-bold mb-3">Admin Analytics</h4>
-
-              <p className="text-slate-400">
-                Monitor ticket volume, AI resolution rate, open issues, and
-                support performance.
-              </p>
-            </div>
-
-            <div className="bg-slate-950 border border-slate-800 p-8 rounded-2xl">
-              <div className="text-4xl mb-5">🔐</div>
-
-              <h4 className="text-xl font-bold mb-3">Secure Login</h4>
-
-              <p className="text-slate-400">
-                Supports user authentication and role-based access for customers
-                and admins.
-              </p>
-            </div>
-
-            <div className="bg-slate-950 border border-slate-800 p-8 rounded-2xl">
-              <div className="text-4xl mb-5">⚡</div>
-
-              <h4 className="text-xl font-bold mb-3">Fast Responses</h4>
-
-              <p className="text-slate-400">
-                Reduce customer wait times by giving instant answers to common
-                issues.
-              </p>
-            </div>
-
-            <div className="bg-slate-950 border border-slate-800 p-8 rounded-2xl">
-              <div className="text-4xl mb-5">🧠</div>
-
-              <h4 className="text-xl font-bold mb-3">Context Memory</h4>
-
-              <p className="text-slate-400">
-                Keeps track of conversation history to provide better and more
-                relevant replies.
-              </p>
-            </div>
+                <p className="text-slate-400">{text}</p>
+              </div>
+            ))}
           </div>
         </div>
       </section>
 
-      {/* How It Works */}
       <section id="how-it-works" className="px-6 md:px-12 py-20">
         <div className="max-w-6xl mx-auto">
           <div className="text-center mb-14">
@@ -208,83 +175,42 @@ function Home() {
           </div>
 
           <div className="grid md:grid-cols-4 gap-8">
-            <div className="text-center">
-              <div className="w-14 h-14 bg-blue-600 rounded-full mx-auto flex items-center justify-center text-xl font-bold mb-4">
-                1
+            {[
+              ["1", "Customer Asks", "User sends a question through the chatbot."],
+              ["2", "AI Responds", "AI searches FAQs and responds instantly."],
+              ["3", "Ticket Created", "Complex issues are converted into support tickets."],
+              ["4", "Admin Resolves", "Support team manages tickets from the dashboard."],
+            ].map(([number, title, text]) => (
+              <div key={number} className="text-center">
+                <div className="w-14 h-14 bg-blue-600 rounded-full mx-auto flex items-center justify-center text-xl font-bold mb-4">
+                  {number}
+                </div>
+
+                <h4 className="font-bold mb-2">{title}</h4>
+
+                <p className="text-slate-400">{text}</p>
               </div>
-
-              <h4 className="font-bold mb-2">Customer Asks</h4>
-
-              <p className="text-slate-400">
-                User sends a question through the chatbot.
-              </p>
-            </div>
-
-            <div className="text-center">
-              <div className="w-14 h-14 bg-blue-600 rounded-full mx-auto flex items-center justify-center text-xl font-bold mb-4">
-                2
-              </div>
-
-              <h4 className="font-bold mb-2">AI Responds</h4>
-
-              <p className="text-slate-400">
-                AI searches FAQs and responds instantly.
-              </p>
-            </div>
-
-            <div className="text-center">
-              <div className="w-14 h-14 bg-blue-600 rounded-full mx-auto flex items-center justify-center text-xl font-bold mb-4">
-                3
-              </div>
-
-              <h4 className="font-bold mb-2">Ticket Created</h4>
-
-              <p className="text-slate-400">
-                Complex issues are converted into support tickets.
-              </p>
-            </div>
-
-            <div className="text-center">
-              <div className="w-14 h-14 bg-blue-600 rounded-full mx-auto flex items-center justify-center text-xl font-bold mb-4">
-                4
-              </div>
-
-              <h4 className="font-bold mb-2">Admin Resolves</h4>
-
-              <p className="text-slate-400">
-                Support team manages tickets from the dashboard.
-              </p>
-            </div>
+            ))}
           </div>
         </div>
       </section>
 
-      {/* Stats */}
       <section className="px-6 md:px-12 py-20 bg-blue-600">
         <div className="max-w-6xl mx-auto grid md:grid-cols-4 gap-8 text-center">
-          <div>
-            <h3 className="text-4xl font-bold">70%</h3>
-            <p className="text-blue-100 mt-2">Faster Responses</p>
-          </div>
-
-          <div>
-            <h3 className="text-4xl font-bold">24/7</h3>
-            <p className="text-blue-100 mt-2">AI Availability</p>
-          </div>
-
-          <div>
-            <h3 className="text-4xl font-bold">40%</h3>
-            <p className="text-blue-100 mt-2">Reduced Ticket Load</p>
-          </div>
-
-          <div>
-            <h3 className="text-4xl font-bold">100%</h3>
-            <p className="text-blue-100 mt-2">Trackable Support</p>
-          </div>
+          {[
+            ["70%", "Faster Responses"],
+            ["24/7", "AI Availability"],
+            ["40%", "Reduced Ticket Load"],
+            ["100%", "Trackable Support"],
+          ].map(([value, label]) => (
+            <div key={label}>
+              <h3 className="text-4xl font-bold">{value}</h3>
+              <p className="text-blue-100 mt-2">{label}</p>
+            </div>
+          ))}
         </div>
       </section>
 
-      {/* CTA */}
       <section className="px-6 md:px-12 py-20">
         <div className="max-w-4xl mx-auto text-center">
           <h3 className="text-3xl md:text-5xl font-bold mb-6">
@@ -296,19 +222,28 @@ function Home() {
             tickets, and improve customer satisfaction.
           </p>
 
-          <Link
-            to="/register"
-            className="bg-blue-600 hover:bg-blue-700 px-8 py-4 rounded-xl font-semibold inline-block"
-          >
-            Get Started Now
-          </Link>
+          <div className="flex flex-col sm:flex-row justify-center gap-4">
+            <Link
+              to="/register"
+              className="bg-blue-600 hover:bg-blue-700 px-8 py-4 rounded-xl font-semibold transition"
+            >
+              Customer Registration
+            </Link>
+
+            <Link
+              to="/admin-register"
+              className="border border-slate-700 hover:bg-slate-800 px-8 py-4 rounded-xl font-semibold transition"
+            >
+              Admin Registration
+            </Link>
+          </div>
         </div>
       </section>
 
-      {/* Footer */}
       <footer className="px-6 md:px-12 py-8 border-t border-slate-800 text-center text-slate-400">
         <p>
-          © 2026 SupportAI. Full-Stack AI Customer Support Platform built by Nithin Krishna.
+          © 2026 SupportAI. Full-Stack AI Customer Support Platform built by
+          Nithin Krishna.
         </p>
       </footer>
     </div>

@@ -2,6 +2,8 @@ import { BrowserRouter, Route, Routes } from "react-router-dom";
 
 import ProtectedRoute from "./components/ProtectedRoute";
 
+import AdminLogin from "./pages/AdminLogin";
+import AdminRegister from "./pages/AdminRegister";
 import Chatbot from "./pages/Chatbot";
 import CreateTicket from "./pages/CreateTicket";
 import CustomerDashboard from "./pages/CustomerDashboard";
@@ -43,6 +45,10 @@ function App() {
             </ProtectedRoute>
           }
         />
+
+<Route path="/admin-login" element={<AdminLogin />} />
+
+<Route path="/admin-register" element={<AdminRegister />} />
 
         <Route
           path="/create-ticket"
