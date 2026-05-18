@@ -478,59 +478,43 @@ router.get(
 |--------------------------------------------------------------------------
 */
 
-router.post(
-  "/ticket",
-  verifyToken,
-  async (req, res) => {
-    try {
-      const { subject, description } = req.body;
+router.post("/ticket", verifyToken, upload.single("image"), async (req, res) => {
+  try {
+    const subject = req.body.subject?.trim();
+    const description = req.body.description?.trim();
 
-      if (!subject || !description) {
-        return res.status(400).json({
-          success: false,
-          message:
-            "Subject and description are required",
-        });
-      }
-
-      const result = await pool.query(
-        `
-        INSERT INTO tickets
-        (user_id, subject, description)
-        VALUES ($1, $2, $3)
-        RETURNING
-          id,
-          subject,
-          description,
-          status,
-          created_at
-        `,
-        [
-          req.user.id,
-          subject,
-          description,
-        ]
-      );
-
-      return res.status(201).json({
-        success: true,
-        message:
-          "Support ticket created successfully",
-        ticket: result.rows[0],
-      });
-    } catch (error) {
-      console.error(
-        "Create ticket error:",
-        error.message
-      );
-
-      return res.status(500).json({
+    if (!subject || !description) {
+      return res.status(400).json({
         success: false,
-        message: "Failed to create ticket",
+        message: "Subject and description are required",
       });
     }
+
+    const imagePath = req.file ? req.file.path : null;
+
+    const result = await pool.query(
+      `
+      INSERT INTO tickets (user_id, subject, description, image_path)
+      VALUES ($1, $2, $3, $4)
+      RETURNING id, subject, description, status, image_path, created_at
+      `,
+      [req.user.id, subject, description, imagePath]
+    );
+
+    return res.status(201).json({
+      success: true,
+      message: "Support ticket created successfully",
+      ticket: result.rows[0],
+    });
+  } catch (error) {
+    console.error("Create ticket error:", error.message);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to create ticket",
+    });
   }
-);
+});
 
 /*
 |--------------------------------------------------------------------------
