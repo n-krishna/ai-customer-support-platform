@@ -2,6 +2,7 @@ import { BrowserRouter, Route, Routes } from "react-router-dom";
 
 import ProtectedRoute from "./components/ProtectedRoute";
 
+import AdminDashboard from "./pages/AdminDashboard";
 import AdminLogin from "./pages/AdminLogin";
 import AdminRegister from "./pages/AdminRegister";
 import Chatbot from "./pages/Chatbot";
@@ -30,7 +31,15 @@ function App() {
           path="/forgot-password"
           element={<ForgotPassword />}
         />
-
+        
+        <Route
+        path="/admin"
+        element={
+       <ProtectedRoute>
+       <AdminDashboard />
+       </ProtectedRoute>
+        }
+        />
         <Route
           path="/reset-password/:token"
           element={<ResetPassword />}

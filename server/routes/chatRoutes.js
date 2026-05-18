@@ -607,4 +607,222 @@ router.delete(
   }
 );
 
+const verifyAdmin = (req, res, next) => {
+  if (req.user.role !== "admin") {
+    return res.status(403).json({
+      success: false,
+      message: "Admin access only",
+    });
+  }
+
+  next();
+};
+
+router.get("/admin/dashboard", verifyToken, verifyAdmin, async (req, res) => {
+  try {
+    const usersResult = await pool.query(
+      `
+      SELECT id, full_name, email, role, created_at
+      FROM users
+      ORDER BY created_at DESC
+      `
+    );
+
+    const ticketsResult = await pool.query(
+      `
+      SELECT 
+        tickets.id,
+        tickets.subject,
+        tickets.description,
+        tickets.status,
+        tickets.created_at,
+        users.full_name,
+        users.email
+      FROM tickets
+      JOIN users ON tickets.user_id = users.id
+      ORDER BY tickets.created_at DESC
+      `
+    );
+
+    const chatsResult = await pool.query(
+      `
+      SELECT 
+        chats.id,
+        chats.title,
+        chats.created_at,
+        users.full_name,
+        users.email
+      FROM chats
+      JOIN users ON chats.user_id = users.id
+      ORDER BY chats.created_at DESC
+      LIMIT 10
+      `
+    );
+
+    return res.json({
+      success: true,
+      users: usersResult.rows,
+      tickets: ticketsResult.rows,
+      chats: chatsResult.rows,
+      stats: {
+        totalUsers: usersResult.rows.length,
+        totalTickets: ticketsResult.rows.length,
+        openTickets: ticketsResult.rows.filter(
+          (ticket) => ticket.status === "Open"
+        ).length,
+        resolvedTickets: ticketsResult.rows.filter(
+          (ticket) => ticket.status === "Resolved"
+        ).length,
+      },
+    });
+  } catch (error) {
+    console.error("Admin dashboard error:", error.message);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to load admin dashboard",
+    });
+  }
+});
+
+router.get("/admin/tickets/:ticketId", verifyToken, verifyAdmin, async (req, res) => {
+  try {
+    const { ticketId } = req.params;
+
+    const ticketResult = await pool.query(
+      `
+      SELECT
+        tickets.id,
+        tickets.subject,
+        tickets.description,
+        tickets.status,
+        tickets.created_at,
+        users.full_name,
+        users.email
+      FROM tickets
+      JOIN users ON tickets.user_id = users.id
+      WHERE tickets.id = $1
+      `,
+      [ticketId]
+    );
+
+    if (ticketResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Ticket not found",
+      });
+    }
+
+    const commentsResult = await pool.query(
+      `
+      SELECT
+        ticket_comments.id,
+        ticket_comments.comment,
+        ticket_comments.created_at,
+        users.full_name AS admin_name
+      FROM ticket_comments
+      LEFT JOIN users ON ticket_comments.admin_id = users.id
+      WHERE ticket_comments.ticket_id = $1
+      ORDER BY ticket_comments.created_at ASC
+      `,
+      [ticketId]
+    );
+
+    return res.json({
+      success: true,
+      ticket: ticketResult.rows[0],
+      comments: commentsResult.rows,
+    });
+  } catch (error) {
+    console.error("Fetch ticket details error:", error.message);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to load ticket details",
+    });
+  }
+});
+
+router.post("/admin/tickets/:ticketId/comment", verifyToken, verifyAdmin, async (req, res) => {
+  try {
+    const { ticketId } = req.params;
+    const comment = req.body.comment?.trim();
+
+    if (!comment) {
+      return res.status(400).json({
+        success: false,
+        message: "Comment is required",
+      });
+    }
+
+    const result = await pool.query(
+      `
+      INSERT INTO ticket_comments (ticket_id, admin_id, comment)
+      VALUES ($1, $2, $3)
+      RETURNING id, comment, created_at
+      `,
+      [ticketId, req.user.id, comment]
+    );
+
+    return res.status(201).json({
+      success: true,
+      message: "Comment added successfully",
+      comment: result.rows[0],
+    });
+  } catch (error) {
+    console.error("Add ticket comment error:", error.message);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to add comment",
+    });
+  }
+});
+
+router.patch("/admin/tickets/:ticketId/status", verifyToken, verifyAdmin, async (req, res) => {
+  try {
+    const { ticketId } = req.params;
+    const { status } = req.body;
+
+    const allowedStatuses = ["Open", "Pending", "Resolved"];
+
+    if (!allowedStatuses.includes(status)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid ticket status",
+      });
+    }
+
+    const result = await pool.query(
+      `
+      UPDATE tickets
+      SET status = $1
+      WHERE id = $2
+      RETURNING id, subject, status
+      `,
+      [status, ticketId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Ticket not found",
+      });
+    }
+
+    return res.json({
+      success: true,
+      message: "Ticket status updated successfully",
+      ticket: result.rows[0],
+    });
+  } catch (error) {
+    console.error("Update ticket status error:", error.message);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to update ticket status",
+    });
+  }
+});
+
 module.exports = router;
