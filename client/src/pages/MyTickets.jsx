@@ -1,11 +1,13 @@
 import axios from "axios";
 import {
-    ArrowLeft,
-    CheckCircle,
-    Clock,
-    LogOut,
-    Plus,
-    Ticket,
+  ArrowLeft,
+  CheckCircle,
+  Clock,
+  LogOut,
+  Plus,
+  Send,
+  Ticket,
+  X,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
@@ -17,6 +19,11 @@ function MyTickets() {
   const token = localStorage.getItem("token");
 
   const [tickets, setTickets] = useState([]);
+  const [selectedTicket, setSelectedTicket] = useState(null);
+  const [comments, setComments] = useState([]);
+  const [replyText, setReplyText] = useState("");
+  const [modalLoading, setModalLoading] = useState(false);
+
   const [status, setStatus] = useState({
     loading: true,
     error: "",
@@ -67,6 +74,69 @@ function MyTickets() {
     };
   }, [token, navigate]);
 
+  const openTicketDetails = async (ticketId) => {
+    try {
+      setModalLoading(true);
+
+      const response = await axios.get(`${API_URL}/tickets/${ticketId}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      setSelectedTicket(response.data.ticket);
+      setComments(response.data.comments || []);
+    } catch (err) {
+      setStatus((prev) => ({
+        ...prev,
+        error: err.response?.data?.message || "Failed to load ticket details",
+      }));
+    } finally {
+      setModalLoading(false);
+    }
+  };
+
+  const addCustomerReply = async (e) => {
+    e.preventDefault();
+
+    if (!replyText.trim() || !selectedTicket) return;
+
+    try {
+      const response = await axios.post(
+        `${API_URL}/tickets/${selectedTicket.id}/comment`,
+        {
+          comment: replyText,
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      setComments((prev) => [
+        ...prev,
+        {
+          ...response.data.comment,
+          sender_name: "You",
+        },
+      ]);
+
+      setReplyText("");
+    } catch (err) {
+      setStatus((prev) => ({
+        ...prev,
+        error: err.response?.data?.message || "Failed to send reply",
+      }));
+    }
+  };
+
+  const closeTicketDetails = () => {
+    setSelectedTicket(null);
+    setComments([]);
+    setReplyText("");
+  };
+
   const handleLogout = () => {
     localStorage.clear();
     navigate("/login", { replace: true });
@@ -92,6 +162,14 @@ function MyTickets() {
     }
 
     return "bg-blue-500/10 text-blue-400 border-blue-500";
+  };
+
+  const getCommentSender = (item) => {
+    if (item.sender_role === "customer") {
+      return item.sender_name || "You";
+    }
+
+    return item.sender_name || item.admin_name || "Support Admin";
   };
 
   if (!token) return null;
@@ -157,7 +235,7 @@ function MyTickets() {
         )}
 
         {status.error && (
-          <div className="bg-red-500/10 border border-red-500 text-red-400 px-4 py-3 rounded-xl">
+          <div className="bg-red-500/10 border border-red-500 text-red-400 px-4 py-3 rounded-xl mb-5">
             {status.error}
           </div>
         )}
@@ -184,9 +262,11 @@ function MyTickets() {
 
         <div className="space-y-5">
           {tickets.map((ticket) => (
-            <div
+            <button
               key={ticket.id}
-              className="bg-slate-900/80 border border-slate-800 rounded-3xl p-6 shadow-xl"
+              type="button"
+              onClick={() => openTicketDetails(ticket.id)}
+              className="w-full text-left bg-slate-900/80 border border-slate-800 hover:border-blue-500 rounded-3xl p-6 shadow-xl transition"
             >
               <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4 mb-4">
                 <div>
@@ -219,10 +299,122 @@ function MyTickets() {
               <div className="border-t border-slate-800 pt-4 text-sm text-slate-500">
                 Created on {formatDate(ticket.created_at)}
               </div>
-            </div>
+            </button>
           ))}
         </div>
       </div>
+
+      {selectedTicket && (
+        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center px-4">
+          <div className="bg-slate-900 border border-slate-700 rounded-3xl w-full max-w-3xl max-h-[90vh] overflow-y-auto shadow-2xl">
+            <div className="flex items-start justify-between p-6 border-b border-slate-800">
+              <div>
+                <p className="text-sm text-slate-500">
+                  Ticket #{selectedTicket.id}
+                </p>
+
+                <h2 className="text-2xl font-bold">
+                  {selectedTicket.subject}
+                </h2>
+
+                <span
+                  className={`inline-flex items-center gap-2 border px-3 py-1 rounded-full text-sm font-semibold mt-3 ${getStatusStyle(
+                    selectedTicket.status
+                  )}`}
+                >
+                  {selectedTicket.status === "Resolved" ? (
+                    <CheckCircle size={15} />
+                  ) : (
+                    <Clock size={15} />
+                  )}
+
+                  {selectedTicket.status}
+                </span>
+              </div>
+
+              <button
+                type="button"
+                onClick={closeTicketDetails}
+                className="text-slate-400 hover:text-white"
+              >
+                <X size={24} />
+              </button>
+            </div>
+
+            {modalLoading ? (
+              <div className="p-6 text-slate-400">
+                Loading ticket details...
+              </div>
+            ) : (
+              <div className="p-6 space-y-6">
+                <div className="bg-slate-950 border border-slate-800 rounded-2xl p-5">
+                  <h3 className="font-bold mb-3">Issue Details</h3>
+
+                  <p className="text-slate-300 whitespace-pre-wrap leading-relaxed">
+                    {selectedTicket.description}
+                  </p>
+
+                  <p className="text-sm text-slate-500 border-t border-slate-800 pt-4 mt-4">
+                    Created on {formatDate(selectedTicket.created_at)}
+                  </p>
+                </div>
+
+                <div className="bg-slate-950 border border-slate-800 rounded-2xl p-5">
+                  <h3 className="font-bold mb-4">Ticket Conversation</h3>
+
+                  {comments.length === 0 ? (
+                    <p className="text-slate-500 mb-5">
+                      No replies yet. You can send a message to the support team
+                      below.
+                    </p>
+                  ) : (
+                    <div className="space-y-4 mb-5">
+                      {comments.map((item) => (
+                        <div
+                          key={item.id}
+                          className={`rounded-xl p-4 border-l-4 ${
+                            item.sender_role === "customer"
+                              ? "bg-blue-600/10 border-blue-500"
+                              : "bg-slate-900 border-green-500"
+                          }`}
+                        >
+                          <p className="text-slate-200 whitespace-pre-wrap">
+                            {item.comment}
+                          </p>
+
+                          <p className="text-xs text-slate-500 mt-2">
+                            {getCommentSender(item)} ·{" "}
+                            {formatDate(item.created_at)}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <form onSubmit={addCustomerReply} className="space-y-3">
+                    <textarea
+                      value={replyText}
+                      onChange={(e) => setReplyText(e.target.value)}
+                      rows={4}
+                      placeholder="Reply to support team..."
+                      className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30 transition resize-none"
+                    />
+
+                    <button
+                      type="submit"
+                      disabled={!replyText.trim()}
+                      className="flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-700 disabled:text-slate-400 px-5 py-3 rounded-xl font-semibold transition"
+                    >
+                      <Send size={18} />
+                      Send Reply
+                    </button>
+                  </form>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
