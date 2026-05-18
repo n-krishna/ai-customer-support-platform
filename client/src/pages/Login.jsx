@@ -23,19 +23,17 @@ function Login() {
 
   useEffect(() => {
     if (token) {
-      navigate("/dashboard", {
-        replace: true,
-      });
+      navigate("/dashboard", { replace: true });
     }
   }, [token, navigate]);
 
   const handleChange = (e) => {
     setError("");
 
-    setFormData({
-      ...formData,
+    setFormData((prev) => ({
+      ...prev,
       [e.target.name]: e.target.value,
-    });
+    }));
   };
 
   const handleSubmit = async (e) => {
@@ -43,7 +41,7 @@ function Login() {
 
     setError("");
 
-    if (!formData.email || !formData.password) {
+    if (!formData.email.trim() || !formData.password.trim()) {
       setError("Email and password are required");
       return;
     }
@@ -54,7 +52,7 @@ function Login() {
       const response = await axios.post(
         "http://localhost:5001/api/auth/login",
         {
-          email: formData.email,
+          email: formData.email.trim(),
           password: formData.password,
         }
       );
@@ -64,20 +62,15 @@ function Login() {
       localStorage.setItem("token", token);
       localStorage.setItem("user", JSON.stringify(user));
 
-      if (user.role === "admin") {
-        navigate("/admin", {
-          replace: true,
-        });
-      } else {
-        navigate("/dashboard", {
-          replace: true,
-        });
-      }
+      navigate(user.role === "admin" ? "/admin" : "/dashboard", {
+        replace: true,
+      });
     } catch (err) {
-      setError(
-        err.response?.data?.message ||
-          "Login failed"
-      );
+      if (err.response?.status === 401 || err.response?.status === 404) {
+        setError("Invalid username or password");
+      } else {
+        setError(err.response?.data?.message || "Login failed");
+      }
     } finally {
       setLoading(false);
     }
@@ -92,9 +85,7 @@ function Login() {
               AI
             </div>
 
-            <span className="text-2xl font-bold">
-              SupportAI
-            </span>
+            <span className="text-2xl font-bold">SupportAI</span>
           </Link>
 
           <Link
@@ -116,13 +107,11 @@ function Login() {
                 Secure Access
               </p>
 
-              <h1 className="text-4xl font-bold mb-4">
-                Welcome back
-              </h1>
+              <h1 className="text-4xl font-bold mb-4">Welcome back</h1>
 
               <p className="text-blue-100 leading-relaxed mb-8">
-                Sign in to manage your AI support conversations,
-                tickets, profile, and customer support activity.
+                Sign in to manage your AI support conversations, tickets,
+                profile, and customer support activity.
               </p>
 
               <div className="space-y-4">
@@ -131,10 +120,7 @@ function Login() {
                     <Sparkles size={22} />
 
                     <div>
-                      <p className="font-semibold">
-                        AI Support
-                      </p>
-
+                      <p className="font-semibold">AI Support</p>
                       <p className="text-sm text-blue-100">
                         Get instant answers anytime
                       </p>
@@ -147,10 +133,7 @@ function Login() {
                     <ShieldCheck size={22} />
 
                     <div>
-                      <p className="font-semibold">
-                        Protected Login
-                      </p>
-
+                      <p className="font-semibold">Protected Login</p>
                       <p className="text-sm text-blue-100">
                         Secured with JWT authentication
                       </p>
