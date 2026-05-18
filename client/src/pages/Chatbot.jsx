@@ -19,6 +19,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 const API_URL = "http://localhost:5001/api/chat";
+
 const DEFAULT_IMAGE_PROMPT =
   "Analyze this screenshot. Identify the issue, explain the cause, and provide step-by-step instructions to fix it.";
 
@@ -31,6 +32,7 @@ const createMessage = (sender, message, image = null) => ({
 
 function Chatbot() {
   const navigate = useNavigate();
+
   const messagesEndRef = useRef(null);
   const recognitionRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -45,12 +47,12 @@ function Chatbot() {
       "Hi! I’m your SupportAI assistant. How can I help you today?"
     ),
   ]);
+
   const [loading, setLoading] = useState(false);
   const [listening, setListening] = useState(false);
   const [activeChatId, setActiveChatId] = useState(null);
   const [chatHistory, setChatHistory] = useState([]);
   const [error, setError] = useState("");
-  const [ticketMessage, setTicketMessage] = useState("");
   const [selectedImage, setSelectedImage] = useState(null);
   const [imagePreview, setImagePreview] = useState("");
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -70,7 +72,6 @@ function Chatbot() {
 
   const resetAlerts = () => {
     setError("");
-    setTicketMessage("");
   };
 
   const fetchChats = useCallback(async () => {
@@ -98,7 +99,9 @@ function Chatbot() {
   }, [token, navigate, fetchChats]);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    messagesEndRef.current?.scrollIntoView({
+      behavior: "smooth",
+    });
   }, [messages, loading]);
 
   const formatTime = (dateValue) =>
@@ -334,7 +337,7 @@ function Chatbot() {
         [...messages].reverse().find((item) => item.sender === "user")
           ?.message || "Support request from chatbot";
 
-      const response = await axios.post(
+      await axios.post(
         `${API_URL}/ticket`,
         {
           subject: "Support request from chatbot",
@@ -343,7 +346,7 @@ function Chatbot() {
         authHeaders
       );
 
-      setTicketMessage(response.data.message);
+      navigate("/create-ticket");
     } catch (err) {
       setError(err.response?.data?.message || "Failed to create ticket");
     }
@@ -351,7 +354,10 @@ function Chatbot() {
 
   const handleLogout = () => {
     localStorage.clear();
-    navigate("/login", { replace: true });
+
+    navigate("/login", {
+      replace: true,
+    });
 
     setTimeout(() => {
       window.location.reload();
@@ -517,12 +523,6 @@ function Chatbot() {
                 </div>
               )}
 
-              {ticketMessage && (
-                <div className="bg-green-500/10 border border-green-500 text-green-400 px-4 py-3 rounded-xl">
-                  {ticketMessage}
-                </div>
-              )}
-
               {messages.map((item, index) => (
                 <div
                   key={`${item.sender}-${index}`}
@@ -585,20 +585,26 @@ function Chatbot() {
 
             <div className="border-t border-slate-800 p-5 bg-slate-900">
               <div className="flex flex-wrap gap-2 mb-4">
-                {[
-                  "I forgot my password",
-                  "Create a ticket",
-                  "Billing issue",
-                  "Update profile",
-                ].map((item) => (
-                  <button
-                    key={item}
-                    onClick={() => setMessage(item)}
-                    className="text-sm bg-slate-950 border border-slate-700 hover:border-blue-500 text-slate-300 hover:text-white px-3 py-2 rounded-xl transition"
-                  >
-                    {item}
-                  </button>
-                ))}
+                {["I forgot my password", "Billing issue", "Update profile"].map(
+                  (item) => (
+                    <button
+                      key={item}
+                      onClick={() => setMessage(item)}
+                      className="text-sm bg-slate-950 border border-slate-700 hover:border-blue-500 text-slate-300 hover:text-white px-3 py-2 rounded-xl transition"
+                    >
+                      {item}
+                    </button>
+                  )
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => navigate("/create-ticket")}
+                  className="hidden sm:flex items-center gap-2 bg-white/10 hover:bg-white/20 border border-white/10 px-4 py-2 rounded-xl transition"
+                >
+                  <Ticket size={16} />
+                  Create Ticket
+                </button>
               </div>
 
               {imagePreview && (
@@ -619,10 +625,7 @@ function Chatbot() {
                 </div>
               )}
 
-              <form
-                onSubmit={handleSendMessage}
-                className="flex items-end gap-3"
-              >
+              <form onSubmit={handleSendMessage} className="flex items-end gap-3">
                 <input
                   ref={fileInputRef}
                   type="file"

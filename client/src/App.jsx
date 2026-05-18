@@ -3,6 +3,7 @@ import { BrowserRouter, Route, Routes } from "react-router-dom";
 import ProtectedRoute from "./components/ProtectedRoute";
 
 import Chatbot from "./pages/Chatbot";
+import CreateTicket from "./pages/CreateTicket";
 import CustomerDashboard from "./pages/CustomerDashboard";
 import ForgotPassword from "./pages/ForgotPassword";
 import Home from "./pages/Home";
@@ -38,6 +39,15 @@ function App() {
           element={
             <ProtectedRoute>
               <CustomerDashboard />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/create-ticket"
+          element={
+            <ProtectedRoute>
+              <CreateTicket />
             </ProtectedRoute>
           }
         />
